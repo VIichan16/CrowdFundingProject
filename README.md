@@ -56,12 +56,21 @@
 
 컴퓨터소프트웨어공학과 학생 4명이 협업하여 기획부터 데이터베이스 설계 및 기능 구현까지 함께 진행하는 팀 프로젝트입니다.
 
+
+| **팀원** | **GitHub 프로필** |
+|---|---|---|
+| 팀원 1 | [@VIichan16](https://github.com/VIichan16) | 
+| 팀원 2 | [@rlawlqls-siasia](https://github.com/rlawlqls-siasia) | 
+| 팀원 3 | [@aism2004](https://github.com/aism2004) | 
+| 팀원 4 | [@이민권](https://github.com/수정예정) |
+
 | 구분 | 내용 |
 |---|---|
 | Team Size | 4명 |
 | Affiliation | 금오공과대학교 |
 | Department | 컴퓨터소프트웨어공학과 |
 | Project Type | 팀 프로젝트 |
+
 
 ## 📈 개발 과정 (Development)
 
