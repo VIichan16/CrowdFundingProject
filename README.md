@@ -58,11 +58,11 @@
 
 
 | **팀원** | **GitHub 프로필** |
-|---|---|---|
-| 팀원 1 | [@VIichan16](https://github.com/VIichan16) | 
-| 팀원 2 | [@rlawlqls-siasia](https://github.com/rlawlqls-siasia) | 
-| 팀원 3 | [@aism2004](https://github.com/aism2004) | 
-| 팀원 4 | [@이민권](https://github.com/수정예정) |
+|:---:|:---|
+| 팀원 1 | [@VIichan16](https://github.com/VIichan16) |
+| 팀원 2 | [@rlawlqls-siasia](https://github.com/rlawlqls-siasia) |
+| 팀원 3 | [@aism2004](https://github.com/aism2004) |
+| 팀원 4 | [@이민권](https://github.com/%EC%88%98%EC%A0%95%EC%98%88%EC%A0%95) |
 
 | 구분 | 내용 |
 |---|---|
