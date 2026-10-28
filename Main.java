@@ -10,21 +10,80 @@ import java.util.List;
 import java.util.Scanner;
 
 
+/*
+ * ==================================================================
+ *  변경 내역 (원본 Main.java 대비, 11/02 DB 검사 기준)
+ *  [수정] = 원본에 있던 것을 고침 / [추가] = 원본에 없던 것을 새로 만듦
+ * ==================================================================
+ *
+ *  [공통]
+ *   - [추가] DBConnection.java (persistence 패키지): 원본이 import했지만 프로젝트에 없던 클래스.
+ *            config/db.properties의 접속 정보를 읽는다.
+ *   - [추가] BusinessException: 입력 오류·업무 규칙 위반을 DB 오류와 구분해 메시지만 출력
+ *   - [추가] readLine / readInt / readAmount / selectCategory / countRows 입력·조회 도우미
+ *            (원본은 Integer.parseInt를 감싸지 않아 문자 입력 시 프로그램이 종료됐음)
+ *   - [수정] main의 catch: catch(Exception) 하나로 받고 instanceof로 구분
+ *            (catch(BusinessException)을 따로 쓰면 테스트를 모두 주석 처리했을 때 컴파일 오류)
+ *   - [추가] 상수 MAKER2_ID, CATEGORIES(가전/식품), PUBLIC_STATUS, CLOSED_STATUS
+ *   - [삭제] findProjectId, findRewardId, insertTestUser (새 initDB에서 쓰지 않음)
+ *
+ *  [initDB]
+ *   - [수정] 원본: 회원 3, 프로젝트 1(카테고리 '테스트'), 리워드 1, 후원 0건
+ *            → 검사 조건(한 메이커 2개 이상 + 후원 기록, 전체 5개 이상) 미충족
+ *   - [추가] resetDB(): 실행할 때마다 8개 테이블 TRUNCATE, ID를 1부터 다시 시작
+ *   - [수정] 회원 8, 배송지 5, 프로젝트 6(가전 3/식품 3, 진행중 3/성공 1/실패 1/대기 1),
+ *            리워드 12(프로젝트마다 한정 1 + 무제한 1), 후원 11, 승인 이력, 좋아요 10, 리뷰 2
+ *   - [추가] insertUser / insertAddress / insertProject / insertReward / insertApproval /
+ *            insertLike / insertReview / insertFunding 삽입 도우미
+ *
+ *  [test01 펀딩 현황]  [수정] 총 금액만 → 리워드별 신청 수량/잔여 수량/서포터/배송지 추가
+ *  [test02 프로젝트 등록]  [수정] '신청' 이력을 넣지 않음(신청은 test03에서), 진행 기간 입력 추가
+ *  [test03 리워드 등록 후 신청]
+ *   - [수정] 리워드마다 '신청' 이력이 쌓이던 문제 → 리워드 2개 이상일 때 1회만 신청
+ *   - [수정] 진행중 프로젝트가 목록에 나와 '대기'로 되돌아가던 문제 → '대기'만 표시
+ *   - [추가] 리워드 연속 입력, 거절된 프로젝트는 '재신청', 목록에 목표 금액·리워드 수 표시
+ *  [test04 승인]  [수정] 조건부 UPDATE(status='대기'일 때만)로 한 번만 승인, 목록에 메이커·리워드 수
+ *  [test05 개인정보 수정]
+ *   - [수정] 전화번호 정규식이 "((((((((((" 도 통과하던 문제 → 01X-XXXX-XXXX 형식만 허용
+ *   - [추가] 현재 값 표시, Enter면 기존 값 유지, UNIQUE 위반도 안내 문구로 처리
+ *  [test06 프로젝트 보기]  [추가] 모금액, 달성률(%), 좋아요 수, 리뷰 수·평균 별점·리뷰 내용
+ *  [test07 필터링]
+ *   - [수정] 진행/마감 조건이 없던 문제 → 카테고리, 진행/마감 선택 추가
+ *   - [수정] 카테고리 자유 입력 LIKE("식"만 쳐도 검색) → 번호 선택 + = 비교
+ *   - [수정] 프로젝트명 검색은 선택 조건으로 유지, 선택한 조건만 WHERE에 붙이는 동적 쿼리
+ *  [test08 리워드 신청]
+ *   - [수정] 같은 프로젝트에 여러 번 후원되던 문제 → 1인 1프로젝트 1후원 검사
+ *   - [추가] 신청 가능한 리워드 목록, 마감일 검사, 기본 배송지 저장, applyReward()로 로직 분리
+ *  [test09 리뷰]
+ *   - [수정] 리뷰 가능한 데이터가 없어 항상 거부되던 문제 → initDB에 성공 프로젝트 + 후원 추가
+ *   - [추가] 작성 가능한 프로젝트를 리워드명과 함께 표시, 기존 리뷰는 '수정'으로 처리
+ *   - [수정] deprecated 예정인 ON DUPLICATE KEY ... VALUES() → 존재 여부로 INSERT/UPDATE 분기
+ *  [test10 동시성 제어]
+ *   - [수정] 재고만 줄고 펀딩 기록이 남지 않던 문제 → applyReward()로 기록 + 재고 감소
+ *   - [수정] 메서드 안의 new Scanner(System.in) + nextInt() 제거 (입력 꼬임, 문자 입력 시 종료)
+ *   - [추가] 서포터 2명으로 성공/실패를 자동 시연, 신청 전후 잔여 수량·펀딩 기록 수 출력
+ * ==================================================================
+ */
+
 public class Main {
     private static final Scanner sc = new Scanner(System.in);
 
     private static final String MAKER_ID = "test_maker";
+    // [추가] 두 번째 메이커 (initDB 더미 데이터용)
     private static final String MAKER2_ID = "test_maker2";
     private static final String SUPPORTER_ID = "test_supporter";
     private static final String ADMIN_ID = "test_admin";
 
     // 카테고리는 가전, 식품 2개
+    // [추가]
     private static final String[] CATEGORIES = {"가전", "식품"};
 
     // 서포터에게 공개되는 프로젝트 상태 (승인 전 '대기'는 제외)
+    // [추가] 상태 목록을 한 곳에서 관리
     private static final String PUBLIC_STATUS = "('진행중', '성공', '실패', '종료')";
     private static final String CLOSED_STATUS = "('성공', '실패', '종료')";
 
+    // [수정] catch 구조 변경 (아래 catch 주석 참고)
     public static void main(String[] args) {
         try {
             // 1) initDB만 주석 해제하고 실행 → 2) initDB 다시 주석 → 3) 테스트를 하나씩 실행
@@ -38,7 +97,7 @@ public class Main {
             //test04ApproveProject();         // ADMIN     - 프로젝트 등록 승인
             //test05UpdateProfile();          // SUPPORTER - 개인정보 수정
             //test06ViewProjects();           // SUPPORTER - 프로젝트 보기
-            //test07FilterProjects();         // SUPPORTER - 프로젝트 필   터링
+            //test07FilterProjects();         // SUPPORTER - 프로젝트 필터링
             //test08ApplyReward();            // SUPPORTER - 리워드 신청
             //test09RegisterReview();         // SUPPORTER - 리뷰 및 별점 등록
             //test10ConcurrencyControl();     // SUPPORTER - 제공 가능 수량 동시성 제어
@@ -58,6 +117,7 @@ public class Main {
     }
 
     // 업무 규칙 위반(수량 부족, 중복 후원 등)을 DB 오류와 구분하기 위한 예외
+    // [추가]
     private static class BusinessException extends Exception {
         BusinessException(String message) {
             super(message);
@@ -99,6 +159,7 @@ public class Main {
         }
     }
 
+    // [추가] COUNT(*) 결과 하나를 돌려주는 도우미
     private static int countRows(Connection conn, String sql, Object... values)
             throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -113,11 +174,13 @@ public class Main {
         }
     }
 
+    // [추가] 입력 도우미
     private static String readLine(String prompt) {
         System.out.print(prompt);
         return sc.nextLine().trim();
     }
 
+    // [추가] 숫자가 아니면 BusinessException (원본은 NumberFormatException으로 종료)
     private static int readInt(String prompt) throws BusinessException {
         String input = readLine(prompt);
 
@@ -128,6 +191,7 @@ public class Main {
         }
     }
 
+    // [추가] 금액 입력: 1원 이상의 정수만 허용
     private static BigDecimal readAmount(String prompt) throws BusinessException {
         String input = readLine(prompt);
 
@@ -145,6 +209,7 @@ public class Main {
     }
 
     // 1. 가전 / 2. 식품, allowAll이면 Enter로 전체 선택 (null 반환)
+    // [추가] 카테고리를 번호로 선택 (원본 test07은 자유 입력 LIKE)
     private static String selectCategory(boolean allowAll) throws BusinessException {
         System.out.println("카테고리를 선택하세요:");
 
@@ -184,11 +249,13 @@ public class Main {
     // 리워드       프로젝트마다 2개 (수량 한정 1 + 수량 제한 없음 1)
     // 후원         11건, 1인 1프로젝트 1후원, 배송지 포함
 
+    // [추가] resetDB가 비우는 테이블 (외래 키 자식 → 부모 순)
     private static final String[] RESET_TABLES = {
             "approval_history", "project_review", "project_like",
             "funding", "reward", "project", "shipping_address", "users"
     };
 
+    // [수정] 원본: 프로젝트 1개, 후원 0건 → 검사 조건에 맞는 더미 데이터로 전면 교체
     private static void initDB() throws Exception {
         resetDB();
 
@@ -351,6 +418,7 @@ public class Main {
 
     // 모든 테이블을 비우고 AUTO_INCREMENT를 1로 되돌림
     // TRUNCATE는 외래 키가 걸린 테이블에 바로 쓸 수 없으므로 잠시 FK 검사를 끈다.
+    // [추가] initDB 실행 전 기존 데이터 초기화
     private static void resetDB() throws SQLException {
         try (Connection conn = DBConnection.getConnection();
              Statement st = conn.createStatement()) {
@@ -369,6 +437,7 @@ public class Main {
         }
     }
 
+    // [추가] 원본 insertTestUser 대체 (생성된 ID를 바로 반환)
     private static long insertUser(
             Connection conn, String loginId, String name,
             String phone, String role) throws SQLException {
@@ -398,6 +467,7 @@ public class Main {
         }
     }
 
+    // [추가] test01 배송지 출력, test08 배송지 저장용
     private static int insertAddress(
             Connection conn, long userId, String recipientName,
             String recipientPhone, String postalCode,
@@ -427,6 +497,7 @@ public class Main {
         }
     }
 
+    // [추가]
     private static int insertProject(
             Connection conn, long makerId, String name, String category,
             String description, String targetAmount,
@@ -462,6 +533,7 @@ public class Main {
     }
 
     // totalQuantity, remainingQuantity가 null이면 수량 제한 없음
+    // [추가] test03에서도 재사용
     private static int insertReward(
             Connection conn, int projectId, String name, String description,
             String requiredAmount, Integer totalQuantity,
@@ -500,6 +572,7 @@ public class Main {
         }
     }
 
+    // [추가] test03, test04에서도 재사용
     private static void insertApproval(
             Connection conn, int projectId, long actorId, String action)
             throws SQLException {
@@ -518,6 +591,7 @@ public class Main {
         }
     }
 
+    // [추가] test06 좋아요 수 표시용 더미 데이터
     private static void insertLike(Connection conn, int projectId, long supporterId)
             throws SQLException {
 
@@ -533,6 +607,7 @@ public class Main {
         }
     }
 
+    // [추가] test06 리뷰 표시용 더미 데이터
     private static void insertReview(
             Connection conn, int projectId, long supporterId,
             int rating, String content) throws SQLException {
@@ -553,6 +628,7 @@ public class Main {
     }
 
     // 후원 금액 = 리워드 금액 x 수량
+    // [추가]
     private static void insertFunding(
             Connection conn, long supporterId, int projectId, int rewardId,
             int addressId, String rewardAmount, int quantity,
@@ -583,6 +659,8 @@ public class Main {
     // 프로젝트별 총 펀딩 금액, 리워드별 신청 수량/잔여 수량/서포터 및 배송지
     // ==================================================
 
+    // [수정] 원본은 프로젝트별 총 금액만 출력
+    //        → 리워드별 신청 수량/잔여 수량, 서포터와 배송지 추가 (검사 문서 1번 요구)
     private static void test01ViewFundingStatus() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long makerId = findUserId(conn, MAKER_ID);
@@ -689,6 +767,9 @@ public class Main {
     // 승인 신청은 리워드를 등록한 뒤 test03에서 한다.
     // ==================================================
 
+    // [수정] 원본은 등록과 동시에 '신청' 이력을 넣어 리워드 없는 프로젝트가 승인 목록에 올라감
+    //        → 프로젝트만 '대기'로 저장, 신청은 test03에서
+    // [추가] 진행 기간(일) 입력, 프로젝트명 길이 검사
     private static void test02RegisterProject() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long makerId = findUserId(conn, MAKER_ID);
@@ -739,6 +820,9 @@ public class Main {
     // 리워드를 여러 개 입력받고, 리워드가 2개 이상이면 신청 이력을 1번만 남긴다.
     // ==================================================
 
+    // [수정] 원본은 리워드 1개마다 '신청' 이력 추가, 진행중 프로젝트를 '대기'로 되돌림
+    //        → '대기' 프로젝트만 대상, 리워드 2개 이상일 때 신청 1회
+    // [추가] 리워드 연속 입력, 거절 시 '재신청', 목록에 목표 금액 표시
     private static void test03RegisterReward() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long makerId = findUserId(conn, MAKER_ID);
@@ -868,6 +952,7 @@ public class Main {
     }
 
     // 가장 최근 승인 이력의 action, 이력이 없으면 null
+    // [추가] test03에서 중복 신청 / 재신청 판단용
     private static String findLastApprovalAction(Connection conn, int projectId)
             throws SQLException {
         String sql = """
@@ -891,6 +976,9 @@ public class Main {
     // test04: 메이커의 프로젝트 등록 신청 승인
     // ==================================================
 
+    // [수정] 원본은 approval_history 행을 잠그고 project_status를 확인하지 않음
+    //        → status='대기'일 때만 바뀌는 조건부 UPDATE로 한 번만 승인
+    // [추가] 목록에 메이커 이름, 리워드 개수 표시
     private static void test04ApproveProject() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long adminId = findUserId(conn, ADMIN_ID);
@@ -993,6 +1081,8 @@ public class Main {
     // 현재 값을 보여주고, Enter를 누르면 기존 값 유지
     // ==================================================
 
+    // [수정] 원본 정규식은 "((((((((((" 도 통과 → 01X-XXXX-XXXX 형식만 허용
+    // [추가] 현재 값 표시, Enter면 기존 값 유지, UNIQUE 위반 예외 처리
     private static void test05UpdateProfile() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long supporterId = findUserId(conn, SUPPORTER_ID);
@@ -1074,6 +1164,7 @@ public class Main {
     // 후원 수 x 좋아요 수 x 리뷰 수만큼 행이 늘어나 SUM(모금액)이 부풀기 때문.
     // ==================================================
 
+    // [추가] 모금액, 달성률(%), 좋아요 수, 리뷰 수·평균 별점·리뷰 내용
     private static void test06ViewProjects() throws Exception {
         String sql = """
                 SELECT p.project_id, p.project_name, p.category,
@@ -1164,6 +1255,8 @@ public class Main {
     // 선택한 조건만 WHERE에 붙이는 동적 쿼리
     // ==================================================
 
+    // [수정] 원본은 '진행중' 고정 + 이름/카테고리 LIKE 검색 (진행/마감 조건 없음)
+    //        → 카테고리(번호 선택), 진행/마감, 프로젝트명(선택) 동적 쿼리
     private static void test07FilterProjects() throws Exception {
         String category = selectCategory(true);
 
@@ -1244,6 +1337,9 @@ public class Main {
     // 하나의 프로젝트에는 하나의 리워드(후원)만 신청 가능
     // ==================================================
 
+    // [수정] 원본은 같은 프로젝트에 여러 번 후원 가능, 문자 입력 시 종료
+    //        → 신청 로직을 applyReward()로 옮기고 1인 1프로젝트 1후원 검사
+    // [추가] 신청 가능한 리워드 목록 출력
     private static void test08ApplyReward() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long supporterId = findUserId(conn, SUPPORTER_ID);
@@ -1261,6 +1357,7 @@ public class Main {
     }
 
     // 진행 중인 프로젝트와 리워드 목록 출력
+    // [추가]
     private static void printOpenRewards(Connection conn) throws SQLException {
         String sql = """
                 SELECT p.project_id, p.project_name,
@@ -1298,6 +1395,7 @@ public class Main {
     //   4. 수량 한정 리워드면 잔여 수량 차감
     //   5. 펀딩 기록 저장 (기본 배송지 포함)
     // 하나라도 실패하면 롤백되어 펀딩 기록과 재고 모두 변하지 않는다.
+    // [추가] 원본 test08의 신청 로직 + 1인 1후원, 마감일 검사, 기본 배송지 저장
     private static BigDecimal applyReward(
             Connection conn, long supporterId, int projectId,
             int rewardId, int quantity) throws Exception {
@@ -1421,6 +1519,9 @@ public class Main {
     // 성공(종료)한 프로젝트에 후원한 서포터만 작성 가능
     // ==================================================
 
+    // [수정] 원본은 성공 프로젝트가 없어 항상 거부됨 (initDB에서 해결)
+    // [수정] ON DUPLICATE KEY ... VALUES() → 리뷰 존재 여부로 INSERT/UPDATE 분기
+    // [추가] 작성 가능한 프로젝트를 리워드명과 함께 표시 (검사 문서 9번: 리워드명/별점/리뷰)
     private static void test09RegisterReview() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             long supporterId = findUserId(conn, SUPPORTER_ID);
@@ -1518,6 +1619,9 @@ public class Main {
     // 동시에 신청이 들어와도 한 트랜잭션씩 순서대로 재고를 확인한다.
     // ==================================================
 
+    // [수정] 원본은 재고만 줄이고 funding 기록을 남기지 않음 → applyReward()로 기록 + 재고 감소
+    // [수정] 메서드 안의 new Scanner(System.in) + nextInt() 제거
+    // [추가] 서포터 2명으로 성공(기록 +1, 재고 감소) / 실패(변화 없음)를 한 번에 시연
     private static void test10ConcurrencyControl() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
 
@@ -1617,6 +1721,7 @@ public class Main {
         }
     }
 
+    // [추가] test10 신청 전후 상태 출력
     private static void printRewardState(Connection conn, int rewardId, String label)
             throws SQLException {
         String sql = """
