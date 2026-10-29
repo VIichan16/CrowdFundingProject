@@ -93,14 +93,14 @@ public class Main {
             // 검사할 항목 하나만 주석 해제하여 실행
             //test01ViewFundingStatus();      // MAKER     - 프로젝트별 펀딩 현황 보기
             //test02RegisterProject();        // MAKER     - 프로젝트 기본 정보 등록
-            //test03RegisterReward();         // MAKER     - 리워드 등록 및 프로젝트 신청 // TODO 리워드 입력떄 잘못입력시 전에 잘 입력되었던 리워드가 초기화되는 현상 수정.
+           //test03RegisterReward();         // MAKER     - 리워드 등록 및 프로젝트 신청
             //test04ApproveProject();         // ADMIN     - 프로젝트 등록 승인
             //test05UpdateProfile();          // SUPPORTER - 개인정보 수정
             //test06ViewProjects();           // SUPPORTER - 프로젝트 보기
             //test07FilterProjects();         // SUPPORTER - 프로젝트 필터링
-            //test08ApplyReward();            // SUPPORTER - 리워드 신청  // TODO 요청 실패: 이미 이 프로젝트에 리워드를 신청했습니다.로만 예외처리로 나옴.
+            //test08ApplyReward();            // SUPPORTER - 리워드 신청
             //test09RegisterReview();         // SUPPORTER - 리뷰 및 별점 등록
-            test10ConcurrencyControl();     // SUPPORTER - 제공 가능 수량 동시성 제어
+            //test10ConcurrencyControl();     // SUPPORTER - 제공 가능 수량 동시성 제어
 
             System.out.println("테스트가 종료되었습니다.");
 
@@ -115,7 +115,6 @@ public class Main {
             }
         }
     }
-<<<<<<< HEAD
 
     // 업무 규칙 위반(수량 부족, 중복 후원 등)을 DB 오류와 구분하기 위한 예외
     // [추가]
@@ -125,8 +124,7 @@ public class Main {
         }
     }
 
-=======
->>>>>>> fa96b81872c1619e59ef49109620a9885f54c66f
+
     // ==================================================
     // 공통 도우미
     // ==================================================
@@ -830,7 +828,7 @@ public class Main {
         try (Connection conn = DBConnection.getConnection()) {
             long makerId = findUserId(conn, MAKER_ID);
 
-            // 1. 승인 전('대기') 프로젝트 목록
+            // 1. 승인 전('대기') 프로젝트 목록 출력
             System.out.println("\n===== 승인 전 내 프로젝트 목록 =====");
 
             String projectSql = """
@@ -873,7 +871,7 @@ public class Main {
                 throw new BusinessException("목록에 없는 프로젝트 ID입니다.");
             }
 
-            // 2. 리워드 입력 (리워드명을 비우면 입력 종료)
+            // 2. 리워드 입력 루프 (실수해도 기존 입력 데이터가 유지되도록 예외 방어 적용)
             List<String[]> rewards = new ArrayList<>();
 
             while (true) {
@@ -882,24 +880,41 @@ public class Main {
 
                 String name = readLine("리워드명: ");
                 if (name.isBlank()) {
-                    break;
+                    break; // 리워드명이 공백이면 입력 종료 및 저장 단계로 이동
                 }
 
                 String description = readLine("리워드 설명: ");
                 if (description.isBlank()) {
-                    throw new BusinessException("리워드 설명을 입력하세요.");
+                    System.out.println("⚠️ [오류] 리워드 설명을 입력하세요. (이전까지 입력한 리워드는 유지됩니다.)");
+                    continue; // 현재 리워드만 다시 입력하도록 유도
                 }
 
-                BigDecimal amount = readAmount("필요 후원 금액: ");
-
-                int quantity = readInt("총 수량 (무제한은 0): ");
-                if (quantity < 0) {
-                    throw new BusinessException("수량은 0 이상이어야 합니다.");
+                BigDecimal amount;
+                try {
+                    amount = readAmount("필요 후원 금액: ");
+                } catch (Exception e) {
+                    System.out.println("⚠️ [오류] 올바른 금액을 입력하세요. (이전까지 입력한 리워드는 유지됩니다.)");
+                    continue;
                 }
 
+                int quantity;
+                try {
+                    quantity = readInt("총 수량 (무제한은 0): ");
+                    if (quantity < 0) {
+                        System.out.println("⚠️ [오류] 수량은 0 이상이어야 합니다. (이전까지 입력한 리워드는 유지됩니다.)");
+                        continue;
+                    }
+                } catch (Exception e) {
+                    System.out.println("⚠️ [오류] 올바른 숫자를 입력하세요. (이전까지 입력한 리워드는 유지됩니다.)");
+                    continue;
+                }
+
+                // 정상 입력된 경우에만 리스트에 추가
                 rewards.add(new String[]{
                         name, description, amount.toPlainString(),
                         String.valueOf(quantity)});
+
+                System.out.println("✅ 리워드가 임시 추가되었습니다. (현재 총 " + rewards.size() + "개)");
             }
 
             if (rewards.isEmpty()) {
@@ -907,7 +922,7 @@ public class Main {
                 return;
             }
 
-            // 3. 리워드 저장 + 승인 신청
+            // 3. 리워드 저장 + 승인 신청 (DB 트랜잭션 시작)
             conn.setAutoCommit(false);
 
             try {
@@ -953,7 +968,6 @@ public class Main {
             }
         }
     }
-
     // 가장 최근 승인 이력의 action, 이력이 없으면 null
     // [추가] test03에서 중복 신청 / 재신청 판단용
     private static String findLastApprovalAction(Connection conn, int projectId)
@@ -1399,9 +1413,14 @@ public class Main {
     //   5. 펀딩 기록 저장 (기본 배송지 포함)
     // 하나라도 실패하면 롤백되어 펀딩 기록과 재고 모두 변하지 않는다.
     // [추가] 원본 test08의 신청 로직 + 1인 1후원, 마감일 검사, 기본 배송지 저장
+
     private static BigDecimal applyReward(
-            Connection conn, long supporterId, int projectId,
-            int rewardId, int quantity) throws Exception {
+            Connection conn,
+            long supporterId,
+            int projectId,
+            int rewardId,
+            int quantity
+    ) throws Exception {
 
         if (quantity <= 0) {
             throw new BusinessException("수량은 1 이상이어야 합니다.");
@@ -1410,108 +1429,161 @@ public class Main {
         conn.setAutoCommit(false);
 
         try {
-            // 1. 프로젝트 행 잠금: 같은 서포터의 중복 신청이 동시에 들어와도 순서대로 처리
+            // 1. 프로젝트 행 잠금 및 신청 가능 여부 확인
             String projectSql = """
-                    SELECT project_id
-                    FROM project
-                    WHERE project_id = ?
-                      AND project_status = '진행중'
-                      AND end_date >= CURRENT_DATE
-                    FOR UPDATE
-                    """;
+                SELECT project_id
+                FROM project
+                WHERE project_id = ?
+                  AND project_status = '진행중'
+                  AND end_date >= CURRENT_DATE
+                FOR UPDATE
+                """;
 
             if (!exists(conn, projectSql, projectId)) {
-                throw new BusinessException("후원 가능한 진행 중 프로젝트가 아닙니다.");
+                throw new BusinessException(
+                        "후원 가능한 진행 중 프로젝트가 아닙니다."
+                );
             }
 
-            // 2. 1인 1프로젝트 1후원
-            if (exists(conn, """
-                    SELECT 1 FROM funding
-                    WHERE supporter_id = ?
-                      AND project_id = ?
-                      AND funding_status = '후원완료'
-                    """, supporterId, projectId)) {
-                throw new BusinessException("이미 이 프로젝트에 리워드를 신청했습니다.");
+            // 2. 동일 프로젝트의 동일 리워드 중복 신청만 방지
+            // 서로 다른 reward_id는 같은 프로젝트에서도 신청 가능
+            String duplicateSql = """
+                SELECT 1
+                FROM funding
+                WHERE supporter_id = ?
+                  AND project_id = ?
+                  AND reward_id = ?
+                  AND funding_status = '후원완료'
+                """;
+
+            if (exists(
+                    conn,
+                    duplicateSql,
+                    supporterId,
+                    projectId,
+                    rewardId
+            )) {
+                throw new BusinessException(
+                        "이미 이 프로젝트의 해당 리워드를 신청했습니다."
+                );
             }
 
-            // 3. 리워드 행 잠금
+            // 3. 리워드 행 잠금 및 금액·재고 확인
             BigDecimal amount;
             Integer remaining;
 
             String rewardSql = """
-                    SELECT required_amount, remaining_quantity
-                    FROM reward
-                    WHERE reward_id = ? AND project_id = ?
-                    FOR UPDATE
-                    """;
+                SELECT required_amount, remaining_quantity
+                FROM reward
+                WHERE reward_id = ?
+                  AND project_id = ?
+                FOR UPDATE
+                """;
 
-            try (PreparedStatement ps = conn.prepareStatement(rewardSql)) {
+            try (PreparedStatement ps =
+                         conn.prepareStatement(rewardSql)) {
+
                 ps.setInt(1, rewardId);
                 ps.setInt(2, projectId);
 
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
-                        throw new BusinessException("해당 프로젝트의 리워드를 찾을 수 없습니다.");
+                        throw new BusinessException(
+                                "해당 프로젝트의 리워드를 찾을 수 없습니다."
+                        );
                     }
 
                     amount = rs.getBigDecimal("required_amount")
                             .multiply(BigDecimal.valueOf(quantity));
+
                     int value = rs.getInt("remaining_quantity");
                     remaining = rs.wasNull() ? null : value;
                 }
             }
 
+            // 4. 잔여 수량 확인
+            // remaining_quantity가 NULL이면 수량 제한 없음
             if (remaining != null && remaining < quantity) {
-                throw new BusinessException("리워드 수량이 부족합니다. (잔여 "
-                        + remaining + "개, 신청 " + quantity + "개)");
+                throw new BusinessException(
+                        "리워드 수량이 부족합니다. (잔여 "
+                                + remaining + "개, 신청 "
+                                + quantity + "개)"
+                );
             }
 
-            // 4. 수량 한정 리워드만 차감
+            // 5. 수량 제한 리워드의 재고 차감
             if (remaining != null) {
-                try (PreparedStatement ps = conn.prepareStatement("""
-                        UPDATE reward
-                        SET remaining_quantity = remaining_quantity - ?
-                        WHERE reward_id = ?
-                          AND remaining_quantity >= ?
-                        """)) {
+                String updateSql = """
+                    UPDATE reward
+                    SET remaining_quantity = remaining_quantity - ?
+                    WHERE reward_id = ?
+                      AND project_id = ?
+                      AND remaining_quantity >= ?
+                    """;
+
+                try (PreparedStatement ps =
+                             conn.prepareStatement(updateSql)) {
+
                     ps.setInt(1, quantity);
                     ps.setInt(2, rewardId);
-                    ps.setInt(3, quantity);
+                    ps.setInt(3, projectId);
+                    ps.setInt(4, quantity);
 
-                    if (ps.executeUpdate() == 0) {
-                        throw new BusinessException("리워드 수량이 부족합니다.");
+                    if (ps.executeUpdate() != 1) {
+                        throw new BusinessException(
+                                "리워드 수량이 부족합니다."
+                        );
                     }
                 }
             }
 
-            // 5. 펀딩 기록 (기본 배송지)
+            // 6. 기본 배송지와 함께 펀딩 기록 저장
             String fundingSql = """
-                    INSERT INTO funding
-                    (supporter_id, project_id, reward_id, address_id,
-                     funding_amount, quantity)
-                    VALUES (?, ?, ?,
-                            (SELECT address_id FROM shipping_address
-                             WHERE user_id = ? AND is_default = TRUE
-                             LIMIT 1),
-                            ?, ?)
-                    """;
+                INSERT INTO funding
+                (
+                    supporter_id,
+                    project_id,
+                    reward_id,
+                    address_id,
+                    funding_amount,
+                    quantity
+                )
+                VALUES (
+                    ?, ?, ?,
+                    (
+                        SELECT address_id
+                        FROM shipping_address
+                        WHERE user_id = ?
+                          AND is_default = TRUE
+                        LIMIT 1
+                    ),
+                    ?, ?
+                )
+                """;
 
-            try (PreparedStatement ps = conn.prepareStatement(fundingSql)) {
+            try (PreparedStatement ps =
+                         conn.prepareStatement(fundingSql)) {
+
                 ps.setLong(1, supporterId);
                 ps.setInt(2, projectId);
                 ps.setInt(3, rewardId);
                 ps.setLong(4, supporterId);
                 ps.setBigDecimal(5, amount);
                 ps.setInt(6, quantity);
+
                 ps.executeUpdate();
             }
 
+            // 7. 모든 작업 성공 시 커밋
             conn.commit();
+
             return amount;
 
         } catch (Exception e) {
+            // 오류 발생 시 재고 차감 및 펀딩 기록 롤백
             conn.rollback();
             throw e;
+
         } finally {
             conn.setAutoCommit(true);
         }
@@ -1631,7 +1703,8 @@ public class Main {
             // 1. 수량 한정 리워드 목록
             String rewardSql = """
                     SELECT p.project_id, p.project_name,
-                           r.reward_id, r.reward_name, r.remaining_quantity
+                           r.reward_id, r.reward_name, r.required_amount,
+                           r.remaining_quantity
                     FROM project p
                     JOIN reward r ON p.project_id = r.project_id
                     WHERE p.project_status = '진행중'
@@ -1641,23 +1714,35 @@ public class Main {
 
             System.out.println("\n========== 수량 한정 리워드 ==========");
 
+            List<Integer> rewardIds = new ArrayList<>();
+
             try (PreparedStatement ps = conn.prepareStatement(rewardSql);
                  ResultSet rs = ps.executeQuery()) {
 
                 while (rs.next()) {
-                    System.out.printf("리워드 %d %s (프로젝트 %d %s) | 잔여 %d개%n",
+                    rewardIds.add(rs.getInt("reward_id"));
+
+                    System.out.printf("리워드 %d %s (프로젝트 %d %s) | 1개당 %,.0f원 | 잔여 %d개%n",
                             rs.getInt("reward_id"),
                             rs.getString("reward_name"),
                             rs.getInt("project_id"),
                             rs.getString("project_name"),
+                            rs.getBigDecimal("required_amount"),
                             rs.getInt("remaining_quantity"));
                 }
             }
 
             int rewardId = readInt("\n리워드 ID: ");
 
+            // 목록에 없는 번호는 수량을 묻기 전에 바로 거부
+            if (!rewardIds.contains(rewardId)) {
+                throw new BusinessException("잘못된 리워드 번호입니다: " + rewardId
+                        + " (위 목록의 리워드 ID를 입력하세요)");
+            }
+
+            int quantity = readInt("신청 수량: ");
+
             int projectId;
-            int remaining;
 
             try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT project_id, remaining_quantity FROM reward WHERE reward_id = ?")) {
@@ -1669,16 +1754,15 @@ public class Main {
                     }
 
                     projectId = rs.getInt("project_id");
-                    remaining = rs.getInt("remaining_quantity");
                 }
             }
 
-            // 2. 이 프로젝트에 아직 후원하지 않은 서포터 2명
-            List<Long> supporters = new ArrayList<>();
-            List<String> supporterNames = new ArrayList<>();
+            // 2. 이 프로젝트에 아직 후원하지 않은 서포터 1명 자동 선택
+            //    (1인 1프로젝트 1후원 규칙 때문에 같은 서포터로는 두 번 신청할 수 없음)
+            long supporterId;
 
             try (PreparedStatement ps = conn.prepareStatement("""
-                    SELECT u.id, u.login_id
+                    SELECT u.id
                     FROM users u
                     WHERE u.role = 'SUPPORTER'
                       AND NOT EXISTS (
@@ -1687,62 +1771,35 @@ public class Main {
                             AND f.project_id = ?
                             AND f.funding_status = '후원완료')
                     ORDER BY u.id
-                    LIMIT 2
+                    LIMIT 1
                     """)) {
                 ps.setInt(1, projectId);
 
                 try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        supporters.add(rs.getLong("id"));
-                        supporterNames.add(rs.getString("login_id"));
+                    if (!rs.next()) {
+                        throw new BusinessException(
+                                "이 프로젝트에 신청할 수 있는 서포터가 없습니다. initDB를 다시 실행하세요.");
                     }
+
+                    supporterId = rs.getLong("id");
                 }
             }
 
-            if (supporters.size() < 2) {
-                throw new BusinessException("시연할 서포터가 부족합니다. initDB를 다시 실행하세요.");
-            }
+            // 3. 신청
+            //    성공: 펀딩 기록 +1, 잔여 수량 감소 / 실패: 둘 다 변화 없음 (롤백)
+            //    결과는 Workbench에서 reward, funding 테이블로 확인
 
-            // 3. 서포터 A: 남은 수량 전부 신청 → 성공 (기록 + 재고 감소)
-            // 4. 서포터 B: 1개 신청 → 수량 부족으로 실패 (변화 없음)
-            int[] requests = {Math.max(remaining, 1), 1};
+            String remainingSql = "SELECT remaining_quantity FROM reward WHERE reward_id = ?";
+            int remainingBefore = countRows(conn, remainingSql, rewardId);
 
-            for (int i = 0; i < 2; i++) {
-                printRewardState(conn, rewardId, "\n[신청 전]");
-                System.out.println(supporterNames.get(i) + " → " + requests[i] + "개 신청");
-
-                try {
-                    BigDecimal amount = applyReward(conn, supporters.get(i),
-                            projectId, rewardId, requests[i]);
-                    System.out.printf("결과: 성공 (후원 금액 %,.0f원)%n", amount);
-                } catch (BusinessException e) {
-                    System.out.println("결과: 실패 - " + e.getMessage());
-                }
-
-                printRewardState(conn, rewardId, "[신청 후]");
-            }
-        }
-    }
-
-    // [추가] test10 신청 전후 상태 출력
-    private static void printRewardState(Connection conn, int rewardId, String label)
-            throws SQLException {
-        String sql = """
-                SELECT r.remaining_quantity,
-                       (SELECT COUNT(*) FROM funding f
-                        WHERE f.reward_id = r.reward_id
-                          AND f.funding_status = '후원완료') AS funding_count
-                FROM reward r
-                WHERE r.reward_id = ?
-                """;
-
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, rewardId);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                System.out.println(label + " 잔여 수량: " + rs.getInt("remaining_quantity")
-                        + "개 | 펀딩 기록: " + rs.getInt("funding_count") + "건");
+            try {
+                BigDecimal amount = applyReward(conn, supporterId,
+                        projectId, rewardId, quantity);
+                int remainingAfter = countRows(conn, remainingSql, rewardId);
+                System.out.printf("%n결과: 성공 - 후원 금액 %,.0f원 (잔여 %d개 → %d개, 신청 %d개)%n",
+                        amount, remainingBefore, remainingAfter, quantity);
+            } catch (BusinessException e) {
+                System.out.println("\n결과: 실패 - " + e.getMessage());
             }
         }
     }
