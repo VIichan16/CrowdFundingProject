@@ -24,11 +24,11 @@ public class UserDAO {
 
     public boolean existsByPhoneNumber(String phoneNumber)
             throws Exception {
-        String sql = "SELECT 1 FROM users WHERE phone_number = ?";
+        String sql = "SELECT 1 FROM users WHERE REPLACE(REPLACE(phone_number, '-', ''), ' ', '') = ?";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, phoneNumber);
+            ps.setString(1, phoneNumber.replaceAll("[- ]", ""));
 
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();
@@ -39,8 +39,8 @@ public class UserDAO {
     public void insert(UserDTO user) throws Exception {
         String sql = """
                 INSERT INTO users
-                (login_id, password, name, phone_number, role)
-                VALUES (?, ?, ?, ?, ?)
+                (login_id, password, name, phone_number, role, status)
+                VALUES (?, ?, ?, ?, ?, 'ACTIVE')
                 """;
 
         try (Connection conn = DBConnection.getConnection();
@@ -51,6 +51,18 @@ public class UserDAO {
             ps.setString(4, user.getPhoneNumber());
             ps.setString(5, user.getRole());
 
+            ps.executeUpdate();
+        }
+    }
+
+    public void updatePassword(String loginId, String encodedPassword)
+            throws Exception {
+        String sql = "UPDATE users SET password = ? WHERE login_id = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, encodedPassword);
+            ps.setString(2, loginId);
             ps.executeUpdate();
         }
     }
