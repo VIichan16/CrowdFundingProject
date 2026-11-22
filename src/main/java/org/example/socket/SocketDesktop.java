@@ -1,0 +1,969 @@
+package org.example.socket;
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.io.*;
+import java.net.*;
+import java.util.ArrayList;
+
+public final class SocketDesktop extends JFrame {
+    private static final String[] TITLES={"","로그인","프로젝트 등록","프로젝트 조회","후원하기","좋아요","리뷰 작성","프로젝트 수정","리워드 등록","승인 신청","내 후원 내역","후원자 회원가입","내 프로젝트 현황","승인·거절","전체 펀딩 현황","내 계정"};
+    private static final String[][] FIELDS={{},{"아이디","비밀번호"},{"제목","카테고리","설명","목표 금액","시작일 (YYYY-MM-DD)","종료일 (YYYY-MM-DD)"},{"프로젝트 ID 또는 검색 기준","검색어"},{"프로젝트 ID","리워드 ID","수량"},{"프로젝트 ID"},{"프로젝트 ID","별점 (1–5)","리뷰 내용"},{"프로젝트 ID","제목","카테고리","설명","목표 금액","시작일 (YYYY-MM-DD)","종료일 (YYYY-MM-DD)"},{"프로젝트 ID"},{"프로젝트 ID"},{},{"아이디","비밀번호","이름","전화번호"},{"프로젝트 ID"},{"프로젝트 ID","처리","거절 사유"},{"프로젝트 ID (전체 조회는 비워두기)"},{}};
+
+    private final JPanel nav=new JPanel(), form=new JPanel(), output=new JPanel();
+    private final JLabel account=new JLabel("로그인 전"), heading=new JLabel(), status=new JLabel("서버를 먼저 실행하세요.");
+    private final JButton submit=new JButton("실행");
+    private final ArrayList<JComponent> fields=new ArrayList<>();
+    private final DefaultTableModel catalogModel=new DefaultTableModel(new String[]{"번호","프로젝트","카테고리","상태"},0){public boolean isCellEditable(int r,int c){return false;}};
+    private final JTable catalog=new JTable(catalogModel);
+    private final JCheckBox pending=new JCheckBox("승인 대기만");
+    private final JButton approve=new JButton("선택 프로젝트 심사");
+    private JScrollPane sidebar;
+    private JSplitPane split;
+    private JPanel work;
+    private final JButton entrySwitch=new JButton("회원가입");
+    private String projectImage;
+    private Socket socket;
+    private DataInputStream in;
+    private DataOutputStream out;
+    private final int port;
+    private int type;
+    private String role="", name="";
+    private boolean busy;
+
+    public static void main(String[] args){
+        int port=args.length==0?9090:Integer.parseInt(args[0]);
+        SwingUtilities.invokeLater(()->{
+            try{
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            }catch(Exception ignored){}
+            new SocketDesktop(port).setVisible(true);
+        });
+    }
+
+    private SocketDesktop(int port){
+        super("크라우드펀딩 · TCP 클라이언트");
+        this.port=port;
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setSize(1280,760);
+        setMinimumSize(new Dimension(720,580));
+        setLocationRelativeTo(null);
+
+        JPanel root=new JPanel(new BorderLayout(16,16));
+        root.setBorder(BorderFactory.createEmptyBorder(20,20,20,20));
+        setContentPane(root);
+
+        JLabel title=new JLabel("크라우드펀딩");
+        title.setFont(title.getFont().deriveFont(Font.BOLD,25f));
+
+        JPanel bar=new JPanel(new BorderLayout());
+        bar.add(title,BorderLayout.WEST);
+        bar.add(account,BorderLayout.EAST);
+        root.add(bar,BorderLayout.NORTH);
+
+        nav.setLayout(new BoxLayout(nav,BoxLayout.Y_AXIS));
+        sidebar=new JScrollPane(nav);
+        sidebar.setPreferredSize(new Dimension(220,0));
+        root.add(sidebar,BorderLayout.WEST);
+
+        work=new JPanel(new BorderLayout(0,10));
+        JPanel head=new JPanel(new BorderLayout());
+        heading.setFont(heading.getFont().deriveFont(Font.BOLD,19f));
+        head.add(heading);
+
+        JPanel buttons=new JPanel(new FlowLayout(FlowLayout.RIGHT,4,0));
+        buttons.add(entrySwitch);
+        buttons.add(submit);
+        head.add(buttons,BorderLayout.EAST);
+
+        entrySwitch.addActionListener(e->{
+            if(!busy)page(type==1?11:1);
+        });
+
+        work.add(head,BorderLayout.NORTH);
+
+        form.setLayout(new BoxLayout(form,BoxLayout.Y_AXIS));
+        output.setLayout(new BoxLayout(output,BoxLayout.Y_AXIS));
+
+        split=new JSplitPane(JSplitPane.VERTICAL_SPLIT,new JScrollPane(form),new JScrollPane(output));
+        split.setResizeWeight(.52);
+        split.setDividerLocation(290);
+
+        work.add(split);
+        work.add(status,BorderLayout.SOUTH);
+        root.add(work,BorderLayout.EAST);
+
+        JPanel catalogPanel=new JPanel(new BorderLayout(0,8));
+        catalogPanel.setPreferredSize(new Dimension(360,0));
+        catalogPanel.setBorder(BorderFactory.createTitledBorder("펀딩 프로젝트"));
+
+        JPanel actions=new JPanel(new GridLayout(0,2,4,4));
+        JButton refresh=new JButton("새로고침");
+        JButton detail=new JButton("상세·리워드 사진");
+
+        actions.add(refresh);
+        actions.add(pending);
+        actions.add(detail);
+        actions.add(approve);
+
+        catalogPanel.add(actions,BorderLayout.NORTH);
+        catalogPanel.add(new JScrollPane(catalog));
+        root.add(catalogPanel,BorderLayout.CENTER);
+
+        catalog.setRowHeight(38);
+        catalog.setShowVerticalLines(false);
+        catalog.setIntercellSpacing(new Dimension(0,1));
+        catalog.setFillsViewportHeight(true);
+        catalog.setSelectionBackground(new Color(221,239,233));
+        catalog.setSelectionForeground(new Color(18,55,43));
+        catalog.getTableHeader().setPreferredSize(new Dimension(0,34));
+        catalog.setFont(catalog.getFont().deriveFont(14f));
+        catalog.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        catalog.getColumnModel().getColumn(0).setPreferredWidth(48);
+        catalog.getColumnModel().getColumn(1).setPreferredWidth(340);
+
+        refresh.addActionListener(e->refresh());
+        pending.addActionListener(e->refresh());
+        detail.addActionListener(e->openProject());
+
+        approve.addActionListener(e->{
+            String id=selected();
+            if(id==null||busy)return;
+            page(13);
+            ((JTextField)fields.get(0)).setText(id);
+        });
+
+        catalog.addMouseListener(new java.awt.event.MouseAdapter(){
+            public void mouseClicked(java.awt.event.MouseEvent e){
+                if(e.getClickCount()==2)openProject();
+            }
+        });
+
+        submit.addActionListener(e->send());
+        getRootPane().setDefaultButton(submit);
+
+        menu();
+        page(1);
+        refresh();
+    }
+
+    private void menu(){
+        sidebar.setVisible(!role.isEmpty());
+        work.setPreferredSize(new Dimension(role.isEmpty()?330:470,0));
+        work.revalidate();
+        pending.setVisible(role.equals("ADMIN"));
+        approve.setVisible(role.equals("ADMIN"));
+        pending.setSelected(role.equals("ADMIN"));
+        nav.removeAll();
+
+        account.setText(switch(role){
+            case "MAKER"->"메이커 · "+name;
+            case "SUPPORTER"->"서포터 · "+name;
+            case "ADMIN"->"관리자 · "+name;
+            default->"로그인 전";
+        });
+
+        int[] menu=switch(role){
+            case "MAKER"->new int[]{12,2,3,7,8,9,15};
+            case "SUPPORTER"->new int[]{3,4,5,6,10,15};
+            case "ADMIN"->new int[]{14,13,3,15};
+            default->new int[]{1,11};
+        };
+
+        for(int t:menu)button(TITLES[t],()->page(t));
+
+        if(!role.isEmpty()){
+            button("로그아웃",()->{
+                disconnect();
+                role="";
+                name="";
+                menu();
+                page(1);
+                refresh();
+            });
+        }
+
+        nav.revalidate();
+        nav.repaint();
+    }
+
+    private void button(String title,Runnable action){
+        JButton b=new JButton(title);
+        b.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
+        b.setPreferredSize(new Dimension(205,48));
+        b.setFont(b.getFont().deriveFont(Font.PLAIN,15f));
+        b.setFocusPainted(false);
+        b.setAlignmentX(LEFT_ALIGNMENT);
+        b.addActionListener(e->{
+            if(!busy)action.run();
+        });
+        nav.add(b);
+        nav.add(Box.createVerticalStrut(8));
+    }
+
+    private void row(String label,JComponent component){
+        JPanel r=new JPanel(new BorderLayout(10,0));
+        r.setBorder(BorderFactory.createEmptyBorder(4,8,4,8));
+
+        JLabel l=new JLabel(label);
+        l.setPreferredSize(new Dimension(role.isEmpty()?90:155,26));
+
+        r.add(l,BorderLayout.WEST);
+        r.add(component);
+        r.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));
+        form.add(r);
+    }
+
+    private void field(String label,JComponent c){
+        fields.add(c);
+        row(label,c);
+    }
+
+    private void reward(){
+        form.add(new JSeparator());
+
+        for(String label:new String[]{"리워드명","설명","필요 금액","수량 (무제한은 0)"}){
+            field(label,new JTextField());
+        }
+
+        JTextField encoded=new JTextField();
+        fields.add(encoded);
+
+        JButton choose=new JButton("사진 선택 (JPG/PNG)");
+
+        choose.addActionListener(e->{
+            if(busy)return;
+
+            JFileChooser picker=new JFileChooser();
+            picker.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JPG / PNG","jpg","jpeg","png"));
+
+            if(picker.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+
+            try(var input=java.nio.file.Files.newInputStream(picker.getSelectedFile().toPath())){
+                byte[] bytes=input.readNBytes(2*1024*1024+1);
+
+                if(bytes.length>2*1024*1024){
+                    throw new IOException("리워드 사진은 2 MiB 이하로 선택하세요.");
+                }
+
+                if(bytes.length==0||new ImageIcon(bytes).getIconWidth()<=0){
+                    throw new IOException("사진을 읽을 수 없습니다.");
+                }
+
+                encoded.setText(java.util.Base64.getEncoder().encodeToString(bytes));
+                choose.setText(picker.getSelectedFile().getName());
+
+            }catch(IOException ex){
+                JOptionPane.showMessageDialog(this,ex.getMessage(),"사진 선택 실패",JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        JPanel photo=new JPanel(new BorderLayout());
+        photo.add(choose);
+
+        JButton clear=new JButton("제거");
+        clear.addActionListener(e->{
+            if(!busy){
+                encoded.setText("");
+                choose.setText("사진 선택 (JPG/PNG)");
+            }
+        });
+
+        photo.add(clear,BorderLayout.EAST);
+        row("리워드 사진 (선택)",photo);
+        form.revalidate();
+        form.repaint();
+    }
+
+    private void page(int t){
+        type=t;
+        projectImage=null;
+
+        entrySwitch.setVisible(t==1||t==11);
+        entrySwitch.setText(t==1?"회원가입":"로그인으로");
+
+        split.setResizeWeight(t==1||t==11?0:.52);
+        split.setDividerLocation(t==1?106:t==11?184:290);
+
+        fields.clear();
+        form.removeAll();
+        output.removeAll();
+
+        heading.setText(TITLES[t]);
+
+        submit.setText(t==1?"로그인":t==2?"프로젝트 등록":t==3||t==10||t==12||t==14||t==15?"조회":"실행");
+        status.setText(" ");
+
+        if(t==3){
+            field("조회 방식",new JComboBox<>(new String[]{"전체 목록","프로젝트 ID","제목","카테고리","상태"}));
+            field("검색값 (전체 목록은 생략)",new JTextField());
+        }else{
+            for(String s:FIELDS[t]){
+                field(s,s.equals("비밀번호")?new JPasswordField():s.equals("처리")?new JComboBox<>(new String[]{"승인","거절"}):new JTextField());
+            }
+        }
+
+        if(t==2){
+            JButton choose=new JButton("대표 사진 선택 (JPG/PNG)");
+
+            choose.addActionListener(e->{
+                if(busy)return;
+
+                JFileChooser picker=new JFileChooser();
+                picker.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JPG / PNG","jpg","jpeg","png"));
+
+                if(picker.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+
+                try(var input=java.nio.file.Files.newInputStream(picker.getSelectedFile().toPath())){
+                    byte[] bytes=input.readNBytes(10*1024*1024+1);
+
+                    if(bytes.length>10*1024*1024){
+                        throw new IOException("사진은 10 MiB 이하로 줄여 주세요.");
+                    }
+
+                    ImageIcon icon=new ImageIcon(bytes);
+
+                    if(icon.getIconWidth()<=0){
+                        throw new IOException("사진 파일을 읽을 수 없습니다.");
+                    }
+
+                    projectImage=java.util.Base64.getEncoder().encodeToString(bytes);
+                    choose.setText(picker.getSelectedFile().getName());
+                    status.setText("대표 사진 선택 완료");
+
+                }catch(IOException ex){
+                    projectImage=null;
+                    choose.setText("대표 사진 선택 (JPG/PNG)");
+                    status.setText(ex.getMessage());
+                    JOptionPane.showMessageDialog(this,ex.getMessage(),"사진 첨부 실패",JOptionPane.ERROR_MESSAGE);
+                }
+            });
+
+            row("대표 사진",choose);
+        }
+
+        if(t==8){
+            JButton more=new JButton("리워드 행 추가");
+            more.addActionListener(e->{
+                if(!busy)reward();
+            });
+
+            row("여러 리워드를 한 번에 등록",more);
+            reward();
+        }
+
+        if(t==10||t==15){
+            row("입력 없이 조회 버튼을 누르세요.",new JLabel());
+        }
+
+        form.revalidate();
+        form.repaint();
+        output.revalidate();
+        output.repaint();
+    }
+
+    private String value(JComponent c){
+        if(c instanceof JPasswordField p){
+            char[] chars=p.getPassword();
+            try{
+                return new String(chars);
+            }finally{
+                java.util.Arrays.fill(chars,'\0');
+            }
+        }
+
+        if(c instanceof JTextField f)return f.getText().strip();
+
+        return String.valueOf(((JComboBox<?>)c).getSelectedItem());
+    }
+
+    private void send(){
+        if(busy)return;
+
+        int t=type;
+        var values=new ArrayList<String>();
+
+        for(var c:fields)values.add(value(c));
+
+        if(t==3){
+            String mode=values.get(0);
+            String term=values.get(1);
+            values.clear();
+
+            if(!mode.equals("전체 목록")){
+                if(term.isBlank()){
+                    status.setText("검색값을 입력하세요.");
+                    return;
+                }
+
+                if(!mode.equals("프로젝트 ID"))values.add(mode);
+                values.add(term);
+            }
+        }
+
+        if(t==14&&values.get(0).isBlank())values.clear();
+
+        for(String s:values){
+            if(s.indexOf('\t')>=0||s.indexOf('\n')>=0||s.indexOf('\r')>=0){
+                status.setText("탭과 줄바꿈은 사용할 수 없어요.");
+                return;
+            }
+        }
+
+        if(t==2){
+            if(projectImage==null){
+                JOptionPane.showMessageDialog(this,"대표 사진을 먼저 선택하세요. 선택에 성공하면 버튼에 파일명이 표시됩니다.","사진 첨부 필요",JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            values.add(projectImage);
+        }
+
+        if(t==8){
+            if(values.size()<6||(values.size()-1)%5!=0){
+                status.setText("리워드 입력 항목 구성이 올바르지 않습니다. 리워드마다 이름, 설명, 금액, 수량, 사진 항목이 필요합니다.");
+                return;
+            }
+
+            values.add(0,"images-v1");
+        }
+
+        String body=String.join("\t",values);
+
+        if(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>Packet.MAX){
+            status.setText("사진과 입력값을 합친 크기가 전송 한도를 넘었습니다.");
+            return;
+        }
+
+        for(var c:fields){
+            if(c instanceof JPasswordField p)p.setText("");
+        }
+
+        request(t,body,p->{
+            if(t==1){
+                String[] login=p.body().split("\t",2);
+                role=p.code()==Packet.SUCCESS?login[0]:"";
+                name=role.isEmpty()||login.length<2?"":login[1];
+
+                menu();
+
+                if(!role.isEmpty()){
+                    page(role.equals("ADMIN")?14:role.equals("MAKER")?12:3);
+                }
+            }
+
+            render(p,t);
+
+            if(t==1||(p.code()==Packet.SUCCESS&&(t==2||t==7||t==9||t==13))){
+                refresh();
+            }
+        });
+    }
+
+    private void request(int t,String body,java.util.function.Consumer<Packet> callback){
+        if(busy)return;
+
+        busy=true;
+        submit.setEnabled(false);
+        status.setText("서버 응답을 기다리는 중…");
+
+        new SwingWorker<Packet,Void>(){
+            protected Packet doInBackground()throws Exception{
+                try{
+                    if(socket==null){
+                        socket=new Socket();
+                        socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(),port),4000);
+                        socket.setSoTimeout(120000);
+                        in=new DataInputStream(socket.getInputStream());
+                        out=new DataOutputStream(socket.getOutputStream());
+                    }
+
+                    new Packet(t,Packet.REQUEST,body).write(out);
+                    Packet p=Packet.read(in);
+
+                    if(p==null||p.type()!=t){
+                        throw new IOException("서버 연결이 종료되었거나 응답 형식이 다릅니다.");
+                    }
+
+                    return p;
+
+                }catch(IOException e){
+                    disconnect();
+                    throw e;
+                }
+            }
+
+            protected void done(){
+                busy=false;
+                submit.setEnabled(true);
+
+                try{
+                    callback.accept(get());
+                }catch(Exception e){
+                    role="";
+                    name="";
+                    menu();
+                    page(1);
+                    status.setText("연결 오류: 서버 실행 상태와 포트를 확인한 뒤 다시 로그인하세요.");
+                }
+            }
+        }.execute();
+    }
+
+    private void refresh(){
+        request(16,pending.isSelected()&&role.equals("ADMIN")?"pending":"",p->{
+            catalogModel.setRowCount(0);
+
+            if(p.code()!=Packet.SUCCESS){
+                status.setText(p.body());
+                return;
+            }
+
+            String[] lines=p.body().split("\n");
+
+            for(int i=1;i<lines.length;i++){
+                catalogModel.addRow(lines[i].split("\t",-1));
+            }
+
+            status.setText("프로젝트 "+catalogModel.getRowCount()+"개");
+        });
+    }
+
+    private String selected(){
+        int row=catalog.getSelectedRow();
+
+        if(row<0){
+            status.setText("목록에서 프로젝트를 선택하세요.");
+            return null;
+        }
+
+        return String.valueOf(catalog.getValueAt(row,0));
+    }
+
+    private void openProject(){
+        if(busy)return;
+
+        String id=selected();
+        if(id==null)return;
+
+        if(role.isEmpty()){
+            status.setText("상세 및 리워드 사진은 로그인 후 볼 수 있어요.");
+            return;
+        }
+
+        String titleText=String.valueOf(catalog.getValueAt(catalog.getSelectedRow(),1));
+
+        request(3,id,p->{
+            if(p.code()!=Packet.SUCCESS){
+                render(p,3);
+                return;
+            }
+
+            String[] blocks=p.body().split("\n\n",2);
+            String[] project=blocks[0].split("\n",2);
+            String[] data=project.length==2?project[1].split("\t",-1):new String[0];
+
+            Color ink=new Color(35,39,42);
+            Color muted=new Color(112,119,125);
+            Color line=new Color(230,233,236);
+            Color soft=new Color(247,248,249);
+            Color accent=new Color(39,112,91);
+
+            JDialog dialog=new JDialog(this,"프로젝트 상세",false);
+            dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+            dialog.setSize(1120,740);
+            dialog.setMinimumSize(new Dimension(900,620));
+            dialog.setLocationRelativeTo(this);
+
+            JPanel root=new JPanel(new BorderLayout(28,0));
+            root.setBackground(Color.WHITE);
+            root.setBorder(BorderFactory.createEmptyBorder(26,28,26,28));
+
+            JPanel left=new JPanel(new BorderLayout(0,12));
+            left.setBackground(Color.WHITE);
+            left.setPreferredSize(new Dimension(420,0));
+
+            JLabel hero=new JLabel("대표 이미지를 불러오는 중",SwingConstants.CENTER);
+            hero.setOpaque(true);
+            hero.setBackground(soft);
+            hero.setForeground(muted);
+            hero.setBorder(BorderFactory.createLineBorder(line));
+            hero.setPreferredSize(new Dimension(420,420));
+            left.add(hero,BorderLayout.CENTER);
+
+            JLabel imageLabel=new JLabel("PROJECT IMAGE");
+            imageLabel.setForeground(muted);
+            imageLabel.setFont(imageLabel.getFont().deriveFont(Font.BOLD,11f));
+            left.add(imageLabel,BorderLayout.SOUTH);
+
+            JPanel right=new JPanel(new BorderLayout(0,18));
+            right.setBackground(Color.WHITE);
+
+            JPanel summary=new JPanel();
+            summary.setBackground(Color.WHITE);
+            summary.setLayout(new BoxLayout(summary,BoxLayout.Y_AXIS));
+
+            JLabel eyebrow=new JLabel("PROJECT DETAIL");
+            eyebrow.setForeground(accent);
+            eyebrow.setFont(eyebrow.getFont().deriveFont(Font.BOLD,12f));
+            summary.add(eyebrow);
+            summary.add(Box.createVerticalStrut(8));
+
+            JLabel title=new JLabel("<html><div style='width:570px'>"+escapeHtml(titleText)+"</div></html>");
+            title.setForeground(ink);
+            title.setFont(title.getFont().deriveFont(Font.BOLD,29f));
+            summary.add(title);
+            summary.add(Box.createVerticalStrut(16));
+
+            if(data.length>=8){
+                JPanel tags=new JPanel(new FlowLayout(FlowLayout.LEFT,8,0));
+                tags.setBackground(Color.WHITE);
+                tags.setAlignmentX(Component.LEFT_ALIGNMENT);
+                tags.add(infoChip(data[2],soft,ink));
+                tags.add(infoChip(data[7],new Color(235,245,240),accent));
+                summary.add(tags);
+                summary.add(Box.createVerticalStrut(15));
+
+                JPanel metrics=new JPanel(new GridLayout(1,2,10,0));
+                metrics.setBackground(Color.WHITE);
+                metrics.setAlignmentX(Component.LEFT_ALIGNMENT);
+                metrics.add(metricBox("목표 금액",formatMoney(data[4])+"원",soft,ink,muted));
+                metrics.add(metricBox("펀딩 기간",data[5]+" ~ "+data[6],soft,ink,muted));
+                summary.add(metrics);
+                summary.add(Box.createVerticalStrut(13));
+
+                JPanel fundingBox=new JPanel();
+                fundingBox.setBackground(Color.WHITE);
+                fundingBox.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(line),
+                        BorderFactory.createEmptyBorder(13,15,13,15)
+                ));
+                fundingBox.setLayout(new BoxLayout(fundingBox,BoxLayout.Y_AXIS));
+
+                JLabel fundingCaption=new JLabel("실시간 모금 현황");
+                fundingCaption.setForeground(muted);
+                fundingCaption.setFont(fundingCaption.getFont().deriveFont(Font.BOLD,12f));
+                fundingBox.add(fundingCaption);
+                fundingBox.add(Box.createVerticalStrut(7));
+
+                String pledged=data.length>8?data[8]:"0";
+                String achievement=data.length>9?data[9]:"0";
+                JLabel fundingAmount=new JLabel(formatMoney(pledged)+"원 모금");
+                fundingAmount.setForeground(ink);
+                fundingAmount.setFont(fundingAmount.getFont().deriveFont(Font.BOLD,22f));
+                fundingBox.add(fundingAmount);
+                fundingBox.add(Box.createVerticalStrut(8));
+
+                double pct=0;
+                try{pct=Double.parseDouble(achievement);}catch(Exception ignored){}
+                pct=Math.max(0,Math.min(100,pct));
+
+                JProgressBar progress=new JProgressBar(0,1000);
+                progress.setValue((int)Math.round(pct*10));
+                progress.setStringPainted(false);
+                progress.setForeground(accent);
+                progress.setBackground(new Color(235,238,240));
+                progress.setBorderPainted(false);
+                progress.setPreferredSize(new Dimension(600,13));
+                progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,13));
+                fundingBox.add(progress);
+                fundingBox.add(Box.createVerticalStrut(6));
+
+                JLabel percentLabel=new JLabel(String.format(java.util.Locale.KOREA,"목표 달성률 %.2f%%",pct));
+                percentLabel.setForeground(accent);
+                percentLabel.setFont(percentLabel.getFont().deriveFont(Font.BOLD,13f));
+                fundingBox.add(percentLabel);
+
+                summary.add(fundingBox);
+                summary.add(Box.createVerticalStrut(13));
+
+                JTextArea description=new JTextArea(data[3].replace("\\n","\n"));
+                description.setEditable(false);
+                description.setLineWrap(true);
+                description.setWrapStyleWord(true);
+                description.setFont(description.getFont().deriveFont(13f));
+                description.setForeground(new Color(85,91,96));
+                description.setBackground(Color.WHITE);
+                description.setBorder(BorderFactory.createEmptyBorder(2,0,2,0));
+                description.setRows(3);
+                description.setAlignmentX(Component.LEFT_ALIGNMENT);
+                summary.add(description);
+            }
+
+            JPanel rewards=new JPanel();
+            rewards.setBackground(Color.WHITE);
+            rewards.setLayout(new BoxLayout(rewards,BoxLayout.Y_AXIS));
+
+            JPanel rewardHeader=new JPanel(new BorderLayout());
+            rewardHeader.setBackground(Color.WHITE);
+            JLabel rewardTitle=new JLabel("리워드 구성");
+            rewardTitle.setForeground(ink);
+            rewardTitle.setFont(rewardTitle.getFont().deriveFont(Font.BOLD,19f));
+            rewardHeader.add(rewardTitle,BorderLayout.WEST);
+
+            ArrayList<String> rewardIds=new ArrayList<>();
+            ArrayList<JLabel> rewardPhotos=new ArrayList<>();
+
+            if(blocks.length==2){
+                String[] lines=blocks[1].split("\n");
+                for(int i=1;i<lines.length;i++){
+                    String[] r=lines[i].split("\t",-1);
+                    if(r.length>=5)rewardIds.add(r[0]);
+                }
+            }
+
+            JLabel rewardCount=new JLabel(rewardIds.size()+"개");
+            rewardCount.setForeground(muted);
+            rewardCount.setFont(rewardCount.getFont().deriveFont(12f));
+            rewardHeader.add(rewardCount,BorderLayout.EAST);
+            rewards.add(rewardHeader);
+            rewards.add(Box.createVerticalStrut(12));
+
+            if(blocks.length==2){
+                String[] lines=blocks[1].split("\n");
+
+                for(int i=1;i<lines.length;i++){
+                    String[] r=lines[i].split("\t",-1);
+                    if(r.length<5)continue;
+
+                    JPanel card=new JPanel(new BorderLayout(14,0));
+                    card.setBackground(Color.WHITE);
+                    card.setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(line),
+                            BorderFactory.createEmptyBorder(12,14,12,14)
+                    ));
+                    card.setPreferredSize(new Dimension(650,142));
+                    card.setMaximumSize(new Dimension(Integer.MAX_VALUE,142));
+                    card.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+                    JPanel details=new JPanel();
+                    details.setBackground(Color.WHITE);
+                    details.setLayout(new BoxLayout(details,BoxLayout.Y_AXIS));
+
+                    JLabel rewardName=new JLabel(escapeHtml(r[1]));
+                    rewardName.setForeground(ink);
+                    rewardName.setFont(rewardName.getFont().deriveFont(Font.BOLD,15f));
+                    details.add(rewardName);
+                    details.add(Box.createVerticalStrut(7));
+
+                    JLabel price=new JLabel(formatMoney(r[3])+"원  ·  "+(r[4].isBlank()?"수량 제한 없음":"잔여 "+r[4]+"개"));
+                    price.setForeground(accent);
+                    price.setFont(price.getFont().deriveFont(Font.BOLD,13f));
+                    details.add(price);
+
+                    if(!r[2].isBlank()){
+                        details.add(Box.createVerticalStrut(5));
+                        JLabel desc=new JLabel("<html><div style='width:390px;color:#777777'>"+escapeHtml(r[2])+"</div></html>");
+                        desc.setFont(desc.getFont().deriveFont(12f));
+                        details.add(desc);
+                    }
+
+                    card.add(details,BorderLayout.CENTER);
+
+                    JLabel photo=new JLabel("사진 없음",SwingConstants.CENTER);
+                    photo.setOpaque(true);
+                    photo.setBackground(soft);
+                    photo.setForeground(muted);
+                    photo.setBorder(BorderFactory.createLineBorder(line));
+                    photo.setPreferredSize(new Dimension(116,116));
+                    card.add(photo,BorderLayout.EAST);
+                    rewardPhotos.add(photo);
+
+                    rewards.add(card);
+                    rewards.add(Box.createVerticalStrut(9));
+                }
+            }
+
+            JScrollPane rewardScroll=new JScrollPane(rewards);
+            rewardScroll.setBorder(BorderFactory.createEmptyBorder());
+            rewardScroll.getViewport().setBackground(Color.WHITE);
+            rewardScroll.getVerticalScrollBar().setUnitIncrement(16);
+
+            JPanel rightContent=new JPanel(new BorderLayout(0,18));
+            rightContent.setBackground(Color.WHITE);
+            rightContent.add(summary,BorderLayout.NORTH);
+            rightContent.add(rewardScroll,BorderLayout.CENTER);
+
+            root.add(left,BorderLayout.WEST);
+            root.add(rightContent,BorderLayout.CENTER);
+
+            dialog.setContentPane(root);
+            dialog.setVisible(true);
+
+            request(18,id,res->{
+                if(!dialog.isDisplayable())return;
+
+                if(res.code()!=Packet.SUCCESS){
+                    hero.setText("대표 이미지를 불러오지 못했습니다.");
+                }else{
+                    try{
+                        ImageIcon icon=new ImageIcon(java.util.Base64.getDecoder().decode(res.body()));
+                        if(icon.getIconWidth()>0&&icon.getIconHeight()>0){
+                            hero.setText("");
+                            hero.setIcon(scaled(icon,410,410));
+                        }else{
+                            hero.setText("대표 이미지가 없습니다.");
+                        }
+                    }catch(IllegalArgumentException ex){
+                        hero.setText("대표 이미지 데이터 오류");
+                    }
+                }
+
+                loadRewardImages(dialog,id,rewardIds,rewardPhotos,0);
+            });
+        });
+    }
+
+    private JPanel infoChip(String value,Color background,Color foreground){
+        JPanel chip=new JPanel(new FlowLayout(FlowLayout.LEFT,9,5));
+        chip.setBackground(background);
+        JLabel label=new JLabel(escapeHtml(value));
+        label.setForeground(foreground);
+        label.setFont(label.getFont().deriveFont(Font.BOLD,12f));
+        chip.add(label);
+        return chip;
+    }
+
+    private JPanel metricBox(String label,String value,Color background,Color foreground,Color muted){
+        JPanel box=new JPanel();
+        box.setBackground(background);
+        box.setBorder(BorderFactory.createEmptyBorder(10,12,10,12));
+        box.setLayout(new BoxLayout(box,BoxLayout.Y_AXIS));
+
+        JLabel caption=new JLabel(label);
+        caption.setForeground(muted);
+        caption.setFont(caption.getFont().deriveFont(11f));
+
+        JLabel content=new JLabel("<html><div style='width:220px'>"+escapeHtml(value)+"</div></html>");
+        content.setForeground(foreground);
+        content.setFont(content.getFont().deriveFont(Font.BOLD,13f));
+
+        box.add(caption);
+        box.add(Box.createVerticalStrut(5));
+        box.add(content);
+        return box;
+    }
+
+    private String escapeHtml(String value){
+        return value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("\n","<br>");
+    }
+
+    private String formatMoney(String value){
+        try{
+            java.text.DecimalFormat formatter=new java.text.DecimalFormat("#,##0.##");
+            return formatter.format(new java.math.BigDecimal(value));
+        }catch(Exception e){
+            return value;
+        }
+    }
+
+    private void loadRewardImages(JDialog dialog,String project,ArrayList<String> ids,ArrayList<JLabel> photos,int index){
+        if(!dialog.isDisplayable()||index>=ids.size())return;
+
+        request(17,project+"\t"+ids.get(index),p->{
+            if(!dialog.isDisplayable())return;
+
+            if(p.code()==Packet.SUCCESS){
+                try{
+                    ImageIcon icon=new ImageIcon(java.util.Base64.getDecoder().decode(p.body()));
+                    if(icon.getIconWidth()>0&&icon.getIconHeight()>0){
+                        JLabel photo=photos.get(index);
+                        photo.setText("");
+                        photo.setIcon(scaled(icon,110,110));
+                        photo.setToolTipText("리워드 사진");
+                        photo.revalidate();
+                        photo.repaint();
+                    }
+                }catch(IllegalArgumentException ignored){}
+            }
+
+            loadRewardImages(dialog,project,ids,photos,index+1);
+        });
+    }
+
+    private ImageIcon scaled(ImageIcon source,int width,int height){
+        double ratio=Math.min((double)width/source.getIconWidth(),(double)height/source.getIconHeight());
+        return new ImageIcon(source.getImage().getScaledInstance(
+                Math.max(1,(int)(source.getIconWidth()*ratio)),
+                Math.max(1,(int)(source.getIconHeight()*ratio)),
+                Image.SCALE_SMOOTH
+        ));
+    }
+
+    private void disconnect(){
+        if(socket!=null){
+            try{
+                socket.close();
+            }catch(IOException ignored){}
+        }
+
+        socket=null;
+    }
+
+    private void render(Packet p,int t){
+        render(p,t,output);
+    }
+
+    private void render(Packet p,int t,JPanel output){
+        output.removeAll();
+
+        boolean ok=p.code()==Packet.SUCCESS;
+        status.setText(ok?"요청 완료":"요청 실패 · "+String.format("CODE 0x%04X",p.code()));
+
+        if(ok&&(t==3||t==10||t==12||t==14||t==15)){
+            for(String block:p.body().split("\n\n")){
+                String[] lines=block.split("\n");
+
+                var model=new DefaultTableModel(lines[0].split("\t",-1),0){
+                    public boolean isCellEditable(int r,int c){
+                        return false;
+                    }
+                };
+
+                for(int i=1;i<lines.length;i++){
+                    model.addRow(lines[i].split("\t",-1));
+                }
+
+                JTable table=new JTable(model);
+                table.setRowHeight(25);
+                table.setAutoCreateRowSorter(true);
+                table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+                for(int j=0;j<table.getColumnCount();j++){
+                    table.getColumnModel().getColumn(j).setPreferredWidth(
+                            Math.max(115,table.getColumnName(j).length()*10)
+                    );
+                }
+
+                JScrollPane panel=new JScrollPane(table);
+                panel.setPreferredSize(new Dimension(570,Math.min(220,58+25*model.getRowCount())));
+
+                output.add(panel);
+
+                if(model.getRowCount()==0){
+                    output.add(new JLabel("조회 결과가 없습니다."));
+                }
+
+                output.add(Box.createVerticalStrut(8));
+            }
+        }else{
+            String message=ok?switch(t){
+                case 1->name+"님, 로그인되었습니다.";
+                case 2->"등록된 프로젝트 ID: "+p.body();
+                case 4->"후원 완료 · 금액: "+p.body();
+                default->p.body();
+            }:p.body();
+
+            JTextArea a=new JTextArea(message);
+            a.setLineWrap(true);
+            a.setWrapStyleWord(true);
+            a.setEditable(false);
+            a.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+            output.add(a);
+        }
+
+        output.revalidate();
+        output.repaint();
+    }
+}

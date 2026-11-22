@@ -23,3 +23,18 @@ java {
         languageVersion = JavaLanguageVersion.of(17)
     }
 }
+['socketServer': 'org.example.socket.SocketServer', 'socketClient': 'org.example.socket.SocketClient', 'socketGui': 'org.example.socket.SocketDesktop'].each { taskName, entryPoint ->
+    tasks.register(taskName, JavaExec) {
+        group = 'application'
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = entryPoint
+        if (taskName == 'socketClient') standardInput = System.in
+    }
+}
+
+tasks.register('packetCheck', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.example.socket.PacketCheck'
+}
+check.dependsOn packetCheck

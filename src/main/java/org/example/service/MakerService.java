@@ -130,11 +130,13 @@ public class MakerService {
                 throw new BusinessException("진행 기간은 1일 이상이어야 합니다.");
             }
 
+            String cover = readLine("대표 사진 경로 (없으면 Enter): ").strip();
+            if (cover.length() > 512) throw new BusinessException("대표 사진 경로는 512자 이하여야 합니다.");
             String sql = """
                     INSERT INTO project
                     (maker_id, project_name, category, description,
-                     target_amount, start_date, end_date, project_status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, '대기')
+                     target_amount, start_date, end_date, image_path, project_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '대기')
                     """;
 
             try (PreparedStatement ps = conn.prepareStatement(
@@ -146,6 +148,7 @@ public class MakerService {
                 ps.setBigDecimal(5, target);
                 ps.setDate(6, Date.valueOf(LocalDate.now()));
                 ps.setDate(7, Date.valueOf(LocalDate.now().plusDays(days)));
+                ps.setString(8, cover.isEmpty() ? null : cover);
                 ps.executeUpdate();
 
                 try (ResultSet rs = ps.getGeneratedKeys()) {
@@ -242,10 +245,24 @@ public class MakerService {
                     continue;
                 }
 
+                String imagePath = readLine("리워드 사진 경로 (예: reward-images/sample.jpg, 생략은 Enter): ").strip();
+                if (!imagePath.isEmpty()) {
+                    if (!imagePath.matches("reward-images/[A-Za-z0-9_-]+[.](jpg|png)")) {
+                        System.out.println("reward-images/파일명.jpg 또는 .png 형식으로 입력하세요.");
+                        continue;
+                    }
+                    var image = java.nio.file.Path.of(imagePath);
+                    if (!java.nio.file.Files.isRegularFile(image, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                            || java.nio.file.Files.size(image) > 2 * 1024 * 1024) {
+                        System.out.println("사진 파일이 없거나 2 MiB를 초과합니다.");
+                        continue;
+                    }
+                }
+
                 // 정상 입력된 경우에만 리스트에 추가
                 rewards.add(new String[]{
                         name, description, amount.toPlainString(),
-                        String.valueOf(quantity)});
+                        String.valueOf(quantity), imagePath});
 
                 System.out.println("✅ 리워드가 임시 추가되었습니다. (현재 총 " + rewards.size() + "개)");
             }
@@ -263,8 +280,20 @@ public class MakerService {
                     int quantity = Integer.parseInt(reward[3]);
                     Integer limit = quantity == 0 ? null : quantity;
 
-                    insertReward(conn, projectId, reward[0], reward[1],
-                            reward[2], limit, limit);
+                    try (PreparedStatement ps = conn.prepareStatement("""
+                            INSERT INTO reward (project_id, reward_name, description,
+                                required_amount, total_quantity, remaining_quantity, image_path)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """)) {
+                        ps.setInt(1, projectId);
+                        ps.setString(2, reward[0]);
+                        ps.setString(3, reward[1]);
+                        ps.setBigDecimal(4, new BigDecimal(reward[2]));
+                        ps.setObject(5, limit, Types.INTEGER);
+                        ps.setObject(6, limit, Types.INTEGER);
+                        ps.setString(7, reward[4].isEmpty() ? null : reward[4]);
+                        ps.executeUpdate();
+                    }
                 }
 
                 int rewardCount = countRows(conn,
