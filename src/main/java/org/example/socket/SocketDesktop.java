@@ -17,7 +17,7 @@ import java.util.Locale;
 
 public final class SocketDesktop extends JFrame {
     private static final String[] TITLES = {
-            "", "로그인", "프로젝트 등록", "프로젝트 조회", "후원하기", "좋아요",
+            "프로젝트", "로그인", "프로젝트 등록", "프로젝트 조회", "후원하기", "좋아요",
             "리뷰 작성", "프로젝트 수정", "리워드 등록", "승인 신청", "내 후원 내역",
             "후원자 회원가입", "내 프로젝트 현황", "승인·거절", "전체 펀딩 현황", "마이페이지"
     };
@@ -66,9 +66,8 @@ public final class SocketDesktop extends JFrame {
 
     private final JCheckBox pending = new JCheckBox("승인 대기만");
     private final JButton approve = new JButton("선택 프로젝트 심사");
-    private JScrollPane sidebar;
-    private JSplitPane split;
-    private JPanel work;
+    private JSplitPane split, mainSplit;
+    private JPanel work, catalogPanel, centerContent;
     private final JButton entrySwitch = new JButton("회원가입");
     private String projectImage;
     private Socket socket;
@@ -97,24 +96,34 @@ public final class SocketDesktop extends JFrame {
         setMinimumSize(new Dimension(720, 580));
         setLocationRelativeTo(null);
 
-        JPanel root = new JPanel(new BorderLayout(16, 16));
-        root.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        JPanel root = new JPanel(new BorderLayout(18, 16));
+        root.setBorder(BorderFactory.createEmptyBorder(18, 22, 16, 22));
+        root.setBackground(new Color(246, 248, 250));
         setContentPane(root);
 
         JLabel title = new JLabel("크라우드펀딩");
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 25f));
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 27f));
+        title.setForeground(new Color(28, 38, 52));
 
-        JPanel bar = new JPanel(new BorderLayout());
+        JPanel bar = new JPanel(new BorderLayout(12, 0));
+        bar.setOpaque(false);
+        bar.setBorder(BorderFactory.createEmptyBorder(2, 2, 10, 2));
         bar.add(title, BorderLayout.WEST);
+        account.setFont(account.getFont().deriveFont(Font.BOLD, 14f));
+        account.setForeground(new Color(76, 86, 96));
         bar.add(account, BorderLayout.EAST);
-        root.add(bar, BorderLayout.NORTH);
 
-        nav.setLayout(new BoxLayout(nav, BoxLayout.Y_AXIS));
-        sidebar = new JScrollPane(nav);
-        sidebar.setPreferredSize(new Dimension(220, 0));
-        root.add(sidebar, BorderLayout.WEST);
+        nav.setLayout(new FlowLayout(FlowLayout.LEFT, 8, 5));
+        nav.setOpaque(false);
+        JPanel topArea = new JPanel(new BorderLayout(0, 8));
+        topArea.setOpaque(false);
+        topArea.add(bar, BorderLayout.NORTH);
+        topArea.add(nav, BorderLayout.CENTER);
+        root.add(topArea, BorderLayout.NORTH);
 
         work = new JPanel(new BorderLayout(0, 10));
+        work.setOpaque(false);
+        work.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
         JPanel head = new JPanel(new BorderLayout());
         heading.setFont(heading.getFont().deriveFont(Font.BOLD, 19f));
         head.add(heading);
@@ -133,17 +142,24 @@ public final class SocketDesktop extends JFrame {
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         output.setLayout(new BoxLayout(output, BoxLayout.Y_AXIS));
 
-        split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(form), new JScrollPane(output));
-        split.setResizeWeight(.52);
-        split.setDividerLocation(290);
+        split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                new JScrollPane(form), new JScrollPane(output));
+        split.setResizeWeight(.34);
+        split.setDividerLocation(205);
+        split.setDividerSize(0);
+        split.setEnabled(false);
 
-        work.add(split);
+        work.add(split, BorderLayout.CENTER);
+        status.setForeground(new Color(105, 115, 125));
+        status.setFont(status.getFont().deriveFont(12f));
         work.add(status, BorderLayout.SOUTH);
-        root.add(work, BorderLayout.EAST);
 
-        JPanel catalogPanel = new JPanel(new BorderLayout(0, 8));
-        catalogPanel.setPreferredSize(new Dimension(380, 0));
-        catalogPanel.setBorder(BorderFactory.createTitledBorder("펀딩 프로젝트"));
+        catalogPanel = new JPanel(new BorderLayout(0, 10));
+        catalogPanel.setPreferredSize(new Dimension(610, 0));
+        catalogPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(225, 230, 235)),
+                BorderFactory.createEmptyBorder(14, 14, 14, 14)));
+        catalogPanel.setBackground(Color.WHITE);
 
         JPanel actions = new JPanel(new GridLayout(0, 2, 4, 4));
         JButton refreshBtn = new JButton("새로고침");
@@ -165,8 +181,22 @@ public final class SocketDesktop extends JFrame {
         catalogTop.add(filterBar, BorderLayout.SOUTH);
 
         catalogPanel.add(catalogTop, BorderLayout.NORTH);
-        catalogPanel.add(new JScrollPane(catalog), BorderLayout.CENTER);
-        root.add(catalogPanel, BorderLayout.CENTER);
+        JScrollPane catalogScroll = new JScrollPane(catalog);
+        catalogScroll.setBorder(BorderFactory.createLineBorder(new Color(232, 236, 240)));
+        catalogPanel.add(catalogScroll, BorderLayout.CENTER);
+
+        mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, catalogPanel, work);
+        mainSplit.setResizeWeight(.52);
+        mainSplit.setDividerLocation(0.52);
+        mainSplit.setDividerSize(0);
+        mainSplit.setEnabled(false);
+        SwingUtilities.invokeLater(() -> mainSplit.setDividerLocation(0.52));
+        mainSplit.setBorder(null);
+        mainSplit.setOpaque(false);
+        centerContent = new JPanel(new BorderLayout());
+        centerContent.setOpaque(false);
+        centerContent.add(mainSplit, BorderLayout.CENTER);
+        root.add(centerContent, BorderLayout.CENTER);
 
         catalog.setRowSorter(catalogSorter);
         catalogSorter.setComparator(0, Comparator.comparingInt(v -> {
@@ -208,6 +238,9 @@ public final class SocketDesktop extends JFrame {
             if (id == null || busy) return;
             page(13);
             ((JTextField) fields.get(0)).setText(id);
+        });
+
+        catalog.getSelectionModel().addListSelectionListener(e -> {
         });
 
         catalog.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -284,9 +317,6 @@ public final class SocketDesktop extends JFrame {
     }
 
     private void menu() {
-        sidebar.setVisible(!role.isEmpty());
-        work.setPreferredSize(new Dimension(role.isEmpty() ? 330 : 470, 0));
-        work.revalidate();
         pending.setVisible(role.equals("ADMIN"));
         approve.setVisible(role.equals("ADMIN"));
         pending.setSelected(role.equals("ADMIN"));
@@ -300,9 +330,9 @@ public final class SocketDesktop extends JFrame {
         });
 
         int[] menu = switch (role) {
-            case "MAKER" -> new int[]{12, 2, 3, 7, 8, 9, 15};
-            case "SUPPORTER" -> new int[]{3, 5, 6, 15};
-            case "ADMIN" -> new int[]{14, 13, 3, 15};
+            case "MAKER" -> new int[]{0, 12, 2, 7, 8, 9, 15};
+            case "SUPPORTER" -> new int[]{0, 15};
+            case "ADMIN" -> new int[]{0, 14, 13, 15};
             default -> new int[]{1, 11};
         };
 
@@ -328,16 +358,19 @@ public final class SocketDesktop extends JFrame {
 
     private void button(String title, Runnable action) {
         JButton b = new JButton(title);
-        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
-        b.setPreferredSize(new Dimension(205, 48));
-        b.setFont(b.getFont().deriveFont(Font.PLAIN, 15f));
+        b.setMaximumSize(new Dimension(170, 42));
+        b.setPreferredSize(new Dimension(148, 40));
+        b.setFont(b.getFont().deriveFont(Font.BOLD, 14f));
         b.setFocusPainted(false);
-        b.setAlignmentX(LEFT_ALIGNMENT);
+        b.setBackground(Color.WHITE);
+        b.setForeground(new Color(47, 58, 70));
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(222, 228, 234)),
+                BorderFactory.createEmptyBorder(7, 15, 7, 15)));
         b.addActionListener(e -> {
             if (!busy) action.run();
         });
         nav.add(b);
-        nav.add(Box.createVerticalStrut(8));
     }
 
     private void row(String label, JComponent component) {
@@ -473,8 +506,23 @@ public final class SocketDesktop extends JFrame {
         historyTable.setShowVerticalLines(false);
         historyTable.setIntercellSpacing(new Dimension(0, 1));
         historyPanel.add(new JScrollPane(historyTable), BorderLayout.CENTER);
+        JButton writeReview = new JButton("선택한 프로젝트 리뷰 작성");
+        writeReview.setEnabled(false);
+        historyTable.getSelectionModel().addListSelectionListener(e ->
+                writeReview.setEnabled(!e.getValueIsAdjusting() && historyTable.getSelectedRow() >= 0));
+        writeReview.addActionListener(e -> {
+            int selectedViewRow = historyTable.getSelectedRow();
+            if (selectedViewRow < 0) return;
+            int selectedModelRow = historyTable.convertRowIndexToModel(selectedViewRow);
+            int idColumn = historyModel.getColumnCount() - 1;
+            String projectId = String.valueOf(historyModel.getValueAt(selectedModelRow, idColumn));
+            openReviewDialog(dialog, projectId);
+        });
+        JPanel historyBottom = new JPanel(new BorderLayout(8, 8));
         JLabel historyStatus = new JLabel("후원 내역을 불러오는 중입니다...");
-        historyPanel.add(historyStatus, BorderLayout.SOUTH);
+        historyBottom.add(historyStatus, BorderLayout.CENTER);
+        historyBottom.add(writeReview, BorderLayout.EAST);
+        historyPanel.add(historyBottom, BorderLayout.SOUTH);
         tabs.addTab("내 후원 내역", historyPanel);
 
         // 개인정보 탭
@@ -605,6 +653,10 @@ public final class SocketDesktop extends JFrame {
                             }
                         }
                     }
+                    if (historyTable.getColumnModel().getColumnCount() == 7) {
+                        // 프로젝트 ID는 리뷰 작성에만 사용하고 화면에서는 숨긴다.
+                        historyTable.removeColumn(historyTable.getColumnModel().getColumn(6));
+                    }
                     if (historyTable.getColumnModel().getColumnCount() == 6) {
                         int[] widths = {280, 220, 85, 145, 170, 100};
                         for (int i = 0; i < widths.length; i++)
@@ -618,11 +670,103 @@ public final class SocketDesktop extends JFrame {
         });
     }
 
+    private void openReviewDialog(JDialog owner, String projectId) {
+        if (!"SUPPORTER".equals(role)) {
+            JOptionPane.showMessageDialog(owner, "서포터 계정에서만 리뷰를 작성할 수 있습니다.");
+            return;
+        }
+        JDialog reviewDialog = new JDialog(owner, "프로젝트 리뷰 작성", Dialog.ModalityType.APPLICATION_MODAL);
+        reviewDialog.setSize(480, 330);
+        reviewDialog.setLocationRelativeTo(owner);
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
+        JPanel top = new JPanel(new GridLayout(2, 2, 8, 8));
+        top.add(new JLabel("프로젝트 번호"));
+        top.add(new JLabel(projectId));
+        top.add(new JLabel("별점"));
+        JComboBox<Integer> rating = new JComboBox<>(new Integer[]{5, 4, 3, 2, 1});
+        top.add(rating);
+        JTextArea content = new JTextArea(6, 30);
+        content.setLineWrap(true);
+        content.setWrapStyleWord(true);
+        JScrollPane contentScroll = new JScrollPane(content);
+        contentScroll.setBorder(BorderFactory.createTitledBorder("리뷰 내용"));
+        JButton save = new JButton("리뷰 등록");
+        JButton cancel = new JButton("취소");
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttons.add(cancel); buttons.add(save);
+        cancel.addActionListener(e -> reviewDialog.dispose());
+        save.addActionListener(e -> {
+            String reviewText = content.getText().strip();
+            if (reviewText.isEmpty()) {
+                JOptionPane.showMessageDialog(reviewDialog, "리뷰 내용을 입력하세요.");
+                return;
+            }
+            if (reviewText.contains("\t") || reviewText.contains("\n") || reviewText.contains("\r")) {
+                reviewText = reviewText.replace("\r", " ").replace("\n", " ").replace("\t", " ");
+            }
+            save.setEnabled(false);
+            request(6, projectId + "\t" + rating.getSelectedItem() + "\t" + reviewText, result -> {
+                save.setEnabled(true);
+                if (result.code() == Packet.SUCCESS) {
+                    JOptionPane.showMessageDialog(reviewDialog, "리뷰가 등록되었습니다.");
+                    reviewDialog.dispose();
+                } else {
+                    JOptionPane.showMessageDialog(reviewDialog, result.body(), "리뷰 등록 실패", JOptionPane.WARNING_MESSAGE);
+                }
+            });
+        });
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(contentScroll, BorderLayout.CENTER);
+        panel.add(buttons, BorderLayout.SOUTH);
+        reviewDialog.setContentPane(panel);
+        reviewDialog.setVisible(true);
+    }
+
+    private JPanel infoCard(String title, String description) {
+        JPanel card = new JPanel(new BorderLayout(0, 7));
+        card.setBackground(new Color(248, 250, 252));
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(232, 236, 240)),
+                BorderFactory.createEmptyBorder(9, 13, 9, 13)));
+        JLabel heading = new JLabel(title);
+        heading.setFont(heading.getFont().deriveFont(Font.BOLD, 14f));
+        JTextArea body = new JTextArea(description);
+        body.setEditable(false);
+        body.setLineWrap(true);
+        body.setWrapStyleWord(true);
+        body.setColumns(30);
+        body.setRows(1);
+        body.setFocusable(false);
+        body.setOpaque(false);
+        body.setFocusable(false);
+        body.setForeground(new Color(100, 110, 120));
+        body.setFont(body.getFont().deriveFont(12f));
+        card.add(heading, BorderLayout.NORTH);
+        card.add(body, BorderLayout.CENTER);
+        return card;
+    }
+
+    private void updateHomePreview() {
+        if (type != 0 || form.getComponentCount() == 0) return;
+        int viewRow = catalog.getSelectedRow();
+        if (viewRow < 0) return;
+        int modelRow = catalog.convertRowIndexToModel(viewRow);
+        String title = String.valueOf(catalogModel.getValueAt(modelRow, 1));
+        String category = String.valueOf(catalogModel.getValueAt(modelRow, 2));
+        String state = String.valueOf(catalogModel.getValueAt(modelRow, 3));
+        for (Component component : ((JPanel) form.getComponent(0)).getComponents()) {
+            if (component instanceof JLabel label && "homeSelectedTitle".equals(label.getName())) label.setText(title);
+            if (component instanceof JLabel label && "homeSelectedMeta".equals(label.getName())) label.setText(category + "  ·  " + state);
+        }
+    }
+
     private void page(int t) {
         type = t;
         projectImage = null;
 
         entrySwitch.setVisible(t == 1 || t == 11);
+        submit.setVisible(t != 0);
         entrySwitch.setText(t == 1 ? "회원가입" : "로그인으로");
 
         split.setResizeWeight(t == 1 || t == 11 ? 0 : .52);
@@ -632,7 +776,7 @@ public final class SocketDesktop extends JFrame {
         form.removeAll();
         output.removeAll();
 
-        heading.setText(TITLES[t]);
+        heading.setText(t == 0 ? "" : TITLES[t]);
 
         submit.setText(t == 1 ? "로그인" : t == 2 ? "프로젝트 등록" : t == 15 ? "개인정보 수정" : t == 3 || t == 10 || t == 12 || t == 14 ? "조회" : "실행");
         status.setText(" ");
@@ -705,6 +849,29 @@ public final class SocketDesktop extends JFrame {
         if (t == 10) {
             row("입력 없이 조회 버튼을 누르세요.", new JLabel());
         }
+
+        // 프로젝트 메인 화면에서는 오른쪽 '프로젝트 둘러보기' 패널을 완전히 제거하고
+        // 프로젝트 목록/검색 영역을 전체 너비로 사용한다. 다른 기능 화면에서는 기존 분할 레이아웃을 복원한다.
+        centerContent.removeAll();
+        if (t == 0) {
+            mainSplit.setLeftComponent(null);
+            mainSplit.setRightComponent(null);
+            centerContent.add(catalogPanel, BorderLayout.CENTER);
+        } else {
+            mainSplit.setLeftComponent(catalogPanel);
+            mainSplit.setRightComponent(work);
+            mainSplit.setResizeWeight(.52);
+            mainSplit.setDividerSize(0);
+            mainSplit.setEnabled(false);
+            centerContent.add(mainSplit, BorderLayout.CENTER);
+            SwingUtilities.invokeLater(() -> mainSplit.setDividerLocation(.52));
+            split.setEnabled(true);
+            split.setDividerSize(8);
+            split.setLeftComponent(new JScrollPane(form));
+            split.setRightComponent(new JScrollPane(output));
+        }
+        centerContent.revalidate();
+        centerContent.repaint();
 
         form.revalidate();
         form.repaint();
@@ -856,7 +1023,7 @@ public final class SocketDesktop extends JFrame {
                 menu();
 
                 if (!role.isEmpty()) {
-                    page(role.equals("ADMIN") ? 14 : role.equals("MAKER") ? 12 : 3);
+                    page(role.equals("ADMIN") ? 14 : role.equals("MAKER") ? 12 : 0);
                 }
             }
 
@@ -952,6 +1119,8 @@ public final class SocketDesktop extends JFrame {
             syncCategoryFilterOptions();
             applyCatalogFilterAndSort();
             status.setText("프로젝트 " + catalog.getRowCount() + "개 표시 (전체 " + catalogModel.getRowCount() + "개)");
+            if (type == 0 && catalog.getRowCount() > 0 && catalog.getSelectedRow() < 0) catalog.setRowSelectionInterval(0, 0);
+            updateHomePreview();
         });
     }
 
@@ -1037,6 +1206,29 @@ public final class SocketDesktop extends JFrame {
             title.setForeground(ink);
             title.setFont(title.getFont().deriveFont(Font.BOLD, 29f));
             summary.add(title);
+            summary.add(Box.createVerticalStrut(12));
+
+            JButton likeButton = new JButton("♡ 좋아요");
+            likeButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+            likeButton.setEnabled("SUPPORTER".equals(role));
+            likeButton.setToolTipText("서포터 계정으로 로그인하면 좋아요를 누를 수 있습니다.");
+            likeButton.addActionListener(likeEvent -> {
+                if (!"SUPPORTER".equals(role)) {
+                    JOptionPane.showMessageDialog(dialog, "좋아요는 서포터 계정으로 로그인한 후 이용할 수 있습니다.");
+                    return;
+                }
+                likeButton.setEnabled(false);
+                request(5, id, likeResult -> {
+                    if (likeResult.code() == Packet.SUCCESS) {
+                        likeButton.setText("♥ 좋아요 완료");
+                        JOptionPane.showMessageDialog(dialog, "이 프로젝트에 좋아요를 눌렀습니다.");
+                    } else {
+                        likeButton.setEnabled(true);
+                        JOptionPane.showMessageDialog(dialog, likeResult.body(), "좋아요 처리", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                });
+            });
+            summary.add(likeButton);
             summary.add(Box.createVerticalStrut(16));
 
             if (data.length >= 8) {
