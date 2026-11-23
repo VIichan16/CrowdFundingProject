@@ -7,6 +7,9 @@ import org.example.persistence.DTO.UserDTO;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.security.MessageDigest;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -40,8 +43,8 @@ public class AuthService {
 
     /** MAKER 또는 SUPPORTER만 가입 가능. ADMIN은 서버 측에서도 차단한다. */
     public static void register(String loginId, String password,
-                                 String name, String phoneNumber,
-                                 String role) throws Exception {
+                                String name, String phoneNumber,
+                                String role) throws Exception {
         loginId = loginId == null ? "" : loginId.trim();
         name = name == null ? "" : name.trim();
         phoneNumber = phoneNumber == null ? "" : phoneNumber.trim();
@@ -81,6 +84,41 @@ public class AuthService {
 
         userDAO.insert(new UserDTO(0, loginId, hashPassword(password),
                 name, phoneNumber, role, "ACTIVE"));
+    }
+
+    /** 로그인된 사용자의 현재 비밀번호를 확인한 뒤 새 비밀번호를 안전하게 해시하여 저장한다. */
+    public static void changePassword(Connection connection, long userId,
+                                      String currentPassword, String newPassword)
+            throws Exception {
+        if (currentPassword == null || currentPassword.isBlank()) {
+            throw new IllegalArgumentException("현재 비밀번호를 입력하세요.");
+        }
+        if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 72) {
+            throw new IllegalArgumentException("새 비밀번호는 8~72자로 입력하세요.");
+        }
+
+        String storedPassword;
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT password FROM users WHERE id = ?")) {
+            ps.setLong(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) throw new IllegalArgumentException("회원정보를 찾을 수 없습니다.");
+                storedPassword = rs.getString("password");
+            }
+        }
+
+        if (!verifyPassword(currentPassword, storedPassword)) {
+            throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+        }
+
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE users SET password = ? WHERE id = ?")) {
+            ps.setString(1, hashPassword(newPassword));
+            ps.setLong(2, userId);
+            if (ps.executeUpdate() != 1) {
+                throw new IllegalArgumentException("비밀번호 변경에 실패했습니다.");
+            }
+        }
     }
 
     private static String hashPassword(String password) throws Exception {

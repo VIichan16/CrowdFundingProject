@@ -19,7 +19,7 @@ public final class SocketDesktop extends JFrame {
     private static final String[] TITLES = {
             "", "로그인", "프로젝트 등록", "프로젝트 조회", "후원하기", "좋아요",
             "리뷰 작성", "프로젝트 수정", "리워드 등록", "승인 신청", "내 후원 내역",
-            "후원자 회원가입", "내 프로젝트 현황", "승인·거절", "전체 펀딩 현황", "내 계정"
+            "후원자 회원가입", "내 프로젝트 현황", "승인·거절", "전체 펀딩 현황", "마이페이지"
     };
     private static final String[][] FIELDS = {
             {},
@@ -301,12 +301,15 @@ public final class SocketDesktop extends JFrame {
 
         int[] menu = switch (role) {
             case "MAKER" -> new int[]{12, 2, 3, 7, 8, 9, 15};
-            case "SUPPORTER" -> new int[]{3, 4, 5, 6, 10, 15};
+            case "SUPPORTER" -> new int[]{3, 5, 6, 15};
             case "ADMIN" -> new int[]{14, 13, 3, 15};
             default -> new int[]{1, 11};
         };
 
-        for (int t : menu) button(TITLES[t], () -> page(t));
+        for (int t : menu) button(TITLES[t], () -> {
+            if (t == 15) openMyPageDialog();
+            else page(t);
+        });
 
         if (!role.isEmpty()) {
             button("로그아웃", () -> {
@@ -411,6 +414,210 @@ public final class SocketDesktop extends JFrame {
         form.repaint();
     }
 
+
+    /** 마이페이지를 작은 우측 작업창이 아닌 독립된 큰 팝업 화면으로 표시한다. */
+    private void openMyPageDialog() {
+        if (role.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "로그인 후 이용할 수 있습니다.", "마이페이지", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        JDialog dialog = new JDialog(this, "마이페이지", Dialog.ModalityType.MODELESS);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setSize(920, 680);
+        dialog.setMinimumSize(new Dimension(760, 560));
+        dialog.setLocationRelativeTo(this);
+
+        JPanel root = new JPanel(new BorderLayout(16, 16));
+        root.setBorder(BorderFactory.createEmptyBorder(22, 24, 22, 24));
+        dialog.setContentPane(root);
+
+        JPanel header = new JPanel(new BorderLayout());
+        JPanel headingBox = new JPanel();
+        headingBox.setLayout(new BoxLayout(headingBox, BoxLayout.Y_AXIS));
+        JLabel title = new JLabel("마이페이지");
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 26f));
+        JLabel subtitle = new JLabel(name + "님, 회원 정보를 확인하고 관리할 수 있습니다.");
+        subtitle.setForeground(new Color(105, 105, 105));
+        headingBox.add(title);
+        headingBox.add(Box.createVerticalStrut(6));
+        headingBox.add(subtitle);
+        header.add(headingBox, BorderLayout.WEST);
+        JButton close = new JButton("닫기");
+        close.addActionListener(e -> dialog.dispose());
+        header.add(close, BorderLayout.EAST);
+        root.add(header, BorderLayout.NORTH);
+
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.setFont(tabs.getFont().deriveFont(Font.PLAIN, 15f));
+        root.add(tabs, BorderLayout.CENTER);
+
+        // 후원 내역 탭
+        JPanel historyPanel = new JPanel(new BorderLayout(10, 10));
+        historyPanel.setBorder(BorderFactory.createEmptyBorder(18, 12, 12, 12));
+        JLabel historyTitle = new JLabel("내가 후원한 프로젝트");
+        historyTitle.setFont(historyTitle.getFont().deriveFont(Font.BOLD, 19f));
+        historyPanel.add(historyTitle, BorderLayout.NORTH);
+        DefaultTableModel historyModel = new DefaultTableModel(new Object[]{"후원 내역"}, 0) {
+            @Override public boolean isCellEditable(int row, int column) { return false; }
+        };
+        JTable historyTable = new JTable(historyModel);
+        historyTable.setRowHeight(38);
+        historyTable.setFont(historyTable.getFont().deriveFont(Font.PLAIN, 14f));
+        historyTable.getTableHeader().setFont(historyTable.getTableHeader().getFont().deriveFont(Font.BOLD, 14f));
+        historyTable.getTableHeader().setReorderingAllowed(false);
+        historyTable.setAutoCreateRowSorter(true);
+        historyTable.setFillsViewportHeight(true);
+        historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        historyTable.setGridColor(new Color(230, 233, 238));
+        historyTable.setShowVerticalLines(false);
+        historyTable.setIntercellSpacing(new Dimension(0, 1));
+        historyPanel.add(new JScrollPane(historyTable), BorderLayout.CENTER);
+        JLabel historyStatus = new JLabel("후원 내역을 불러오는 중입니다...");
+        historyPanel.add(historyStatus, BorderLayout.SOUTH);
+        tabs.addTab("내 후원 내역", historyPanel);
+
+        // 개인정보 탭
+        JPanel profileOuter = new JPanel(new BorderLayout(10, 10));
+        profileOuter.setBorder(BorderFactory.createEmptyBorder(18, 12, 12, 12));
+        JPanel profileForm = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 0;
+        JTextField userId = new JTextField(); userId.setEditable(false);
+        JTextField userName = new JTextField();
+        JTextField phone = new JTextField();
+        JTextField bio = new JTextField();
+        JPasswordField currentPw = new JPasswordField();
+        JPasswordField newPw = new JPasswordField();
+        JPasswordField confirmPw = new JPasswordField();
+        JComponent[] inputs = {userId, userName, phone, bio, currentPw, newPw, confirmPw};
+        String[] labels = {"아이디", "이름", "전화번호", "자기소개", "현재 비밀번호", "새 비밀번호", "새 비밀번호 확인"};
+        for (int i = 0; i < labels.length; i++) {
+            gbc.gridx = 0; gbc.gridy = i; gbc.weightx = 0;
+            JLabel label = new JLabel(labels[i]);
+            label.setPreferredSize(new Dimension(145, 32));
+            profileForm.add(label, gbc);
+            gbc.gridx = 1; gbc.weightx = 1;
+            inputs[i].setPreferredSize(new Dimension(300, 36));
+            profileForm.add(inputs[i], gbc);
+        }
+        JLabel passwordHint = new JLabel("비밀번호를 변경하지 않으려면 비밀번호 입력란을 비워 두세요.");
+        passwordHint.setForeground(new Color(110, 110, 110));
+        JButton save = new JButton("변경사항 저장");
+        save.setPreferredSize(new Dimension(150, 40));
+        JPanel profileBottom = new JPanel(new BorderLayout(8, 8));
+        profileBottom.add(passwordHint, BorderLayout.CENTER);
+        profileBottom.add(save, BorderLayout.EAST);
+        profileOuter.add(new JScrollPane(profileForm), BorderLayout.CENTER);
+        profileOuter.add(profileBottom, BorderLayout.SOUTH);
+        tabs.addTab("개인정보 수정", profileOuter);
+
+        save.addActionListener(e -> {
+            if (busy) return;
+            String current = new String(currentPw.getPassword());
+            String next = new String(newPw.getPassword());
+            String confirm = new String(confirmPw.getPassword());
+            if ((!current.isEmpty() || !next.isEmpty() || !confirm.isEmpty()) &&
+                    (current.isBlank() || next.isBlank() || confirm.isBlank())) {
+                JOptionPane.showMessageDialog(dialog, "비밀번호 변경 시 현재 비밀번호와 새 비밀번호, 확인을 모두 입력하세요.");
+                return;
+            }
+            if (!next.isEmpty() && (next.length() < 8 || next.length() > 72)) {
+                JOptionPane.showMessageDialog(dialog, "새 비밀번호는 8~72자로 입력하세요.");
+                return;
+            }
+            if (!next.equals(confirm)) {
+                JOptionPane.showMessageDialog(dialog, "새 비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+                return;
+            }
+            String[] vals = {userName.getText().strip(), phone.getText().strip(), bio.getText().strip(), current, next, confirm};
+            for (String v : vals) {
+                if (v.contains("\t") || v.contains("\n") || v.contains("\r")) {
+                    JOptionPane.showMessageDialog(dialog, "입력값에 탭이나 줄바꿈을 사용할 수 없습니다.");
+                    return;
+                }
+            }
+            request(19, String.join("\t", vals), result -> {
+                if (result.code() == Packet.SUCCESS) {
+                    name = vals[0];
+                    account.setText(switch (role) {
+                        case "MAKER" -> "메이커 · " + name;
+                        case "SUPPORTER" -> "서포터 · " + name;
+                        case "ADMIN" -> "관리자 · " + name;
+                        default -> name;
+                    });
+                    subtitle.setText(name + "님, 회원 정보를 확인하고 관리할 수 있습니다.");
+                    currentPw.setText(""); newPw.setText(""); confirmPw.setText("");
+                    JOptionPane.showMessageDialog(dialog, "개인정보가 수정되었습니다.", "저장 완료", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(dialog, result.body(), "수정 실패", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+        });
+
+        dialog.setVisible(true);
+
+        // 서버가 반환하는 기존 회원정보 형식과 후원내역 형식을 그대로 사용한다.
+        request(15, "", profile -> {
+            if (profile.code() != Packet.SUCCESS) {
+                JOptionPane.showMessageDialog(dialog, "회원정보 조회 실패: " + profile.body());
+                return;
+            }
+            String[] lines = profile.body().split("\n", -1);
+            if (lines.length >= 2) {
+                String[] data = lines[1].split("\t", -1);
+                if (data.length >= 6) {
+                    userId.setText(data[0]);
+                    userName.setText(data[2]);
+                    phone.setText(data[4]);
+                    bio.setText(data[5].equals("null") ? "" : data[5]);
+                }
+            }
+            if (role.equals("SUPPORTER")) {
+                request(10, "", history -> {
+                    historyModel.setRowCount(0);
+                    if (history.code() != Packet.SUCCESS) {
+                        historyStatus.setText("후원 내역 조회 실패: " + history.body());
+                        return;
+                    }
+                    String body = history.body();
+                    if (body == null || body.isBlank() || body.startsWith("후원 내역은 후원자 계정")) {
+                        historyStatus.setText(body == null || body.isBlank() ? "후원 내역이 없습니다." : body);
+                        return;
+                    }
+                    String[] rows = body.split("\n", -1);
+                    if (rows.length > 0) {
+                        String[] headers = rows[0].split("\t", -1);
+                        historyModel.setColumnIdentifiers(headers);
+                        for (int i = 1; i < rows.length; i++) {
+                            if (!rows[i].isBlank()) {
+                                String[] cells = rows[i].split("\t", -1);
+                                // 금액은 천 단위 구분 기호를 적용해 읽기 쉽게 표시한다.
+                                if (cells.length > 3) {
+                                    try {
+                                        java.math.BigDecimal amount = new java.math.BigDecimal(cells[3]);
+                                        cells[3] = String.format(java.util.Locale.KOREA, "%,.0f원", amount);
+                                    } catch (NumberFormatException ignored) { }
+                                }
+                                historyModel.addRow(cells);
+                            }
+                        }
+                    }
+                    if (historyTable.getColumnModel().getColumnCount() == 6) {
+                        int[] widths = {280, 220, 85, 145, 170, 100};
+                        for (int i = 0; i < widths.length; i++)
+                            historyTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+                    }
+                    historyStatus.setText(historyModel.getRowCount() == 0 ? "후원 내역이 없습니다." : "총 " + historyModel.getRowCount() + "건의 후원 내역");
+                });
+            } else {
+                historyStatus.setText("후원 내역은 서포터 계정에서 확인할 수 있습니다.");
+            }
+        });
+    }
+
     private void page(int t) {
         type = t;
         projectImage = null;
@@ -427,12 +634,19 @@ public final class SocketDesktop extends JFrame {
 
         heading.setText(TITLES[t]);
 
-        submit.setText(t == 1 ? "로그인" : t == 2 ? "프로젝트 등록" : t == 3 || t == 10 || t == 12 || t == 14 || t == 15 ? "조회" : "실행");
+        submit.setText(t == 1 ? "로그인" : t == 2 ? "프로젝트 등록" : t == 15 ? "개인정보 수정" : t == 3 || t == 10 || t == 12 || t == 14 ? "조회" : "실행");
         status.setText(" ");
 
         if (t == 3) {
             field("조회 방식", new JComboBox<>(new String[]{"전체 목록", "프로젝트 ID", "제목", "카테고리", "상태"}));
             field("검색값 (전체 목록은 생략)", new JTextField());
+        } else if (t == 15) {
+            field("이름", new JTextField());
+            field("전화번호 (010-0000-0000)", new JTextField());
+            field("자기소개", new JTextField());
+            field("현재 비밀번호 (변경 시 입력)", new JPasswordField());
+            field("새 비밀번호 (8~72자)", new JPasswordField());
+            field("새 비밀번호 확인", new JPasswordField());
         } else {
             for (String s : FIELDS[t]) {
                 field(s, s.equals("비밀번호") ? new JPasswordField() : s.equals("처리") ? new JComboBox<>(new String[]{"승인", "거절"}) : new JTextField());
@@ -488,7 +702,7 @@ public final class SocketDesktop extends JFrame {
             reward();
         }
 
-        if (t == 10 || t == 15) {
+        if (t == 10) {
             row("입력 없이 조회 버튼을 누르세요.", new JLabel());
         }
 
@@ -496,6 +710,42 @@ public final class SocketDesktop extends JFrame {
         form.repaint();
         output.revalidate();
         output.repaint();
+
+        if (t == 15) {
+            request(15, "", p -> {
+                if (p.code() != Packet.SUCCESS) {
+                    status.setText("회원정보 조회 실패: " + p.body());
+                    return;
+                }
+                String[] lines = p.body().split("\n", -1);
+                if (lines.length < 2) {
+                    status.setText("회원정보를 찾을 수 없습니다.");
+                    return;
+                }
+                String[] data = lines[1].split("\t", -1);
+                if (data.length < 6) {
+                    status.setText("회원정보 형식이 올바르지 않습니다.");
+                    return;
+                }
+                ((JTextField) fields.get(0)).setText(data[2]);
+                ((JTextField) fields.get(1)).setText(data[4]);
+                ((JTextField) fields.get(2)).setText(data[5].equals("null") ? "" : data[5]);
+                status.setText("회원정보를 불러왔습니다. 비밀번호 변경은 아래 3개 항목을 모두 입력하세요.");
+                if (t == 15) {
+                    if (role.equals("SUPPORTER")) {
+                        request(10, "", history -> {
+                            if (history.code() == Packet.SUCCESS) {
+                                appendFundingHistory(history.body());
+                            } else {
+                                status.setText("회원정보는 불러왔지만 후원 내역 조회에 실패했습니다: " + history.body());
+                            }
+                        });
+                    } else {
+                        appendFundingHistory("후원 내역은 후원자 계정에서 확인할 수 있습니다.");
+                    }
+                }
+            });
+        }
     }
 
     private String value(JComponent c) {
@@ -564,6 +814,27 @@ public final class SocketDesktop extends JFrame {
             values.add(0, "images-v1");
         }
 
+        if (t == 15) {
+            String currentPassword = values.get(3);
+            String newPassword = values.get(4);
+            String confirmPassword = values.get(5);
+            boolean passwordRequested = !currentPassword.isEmpty() || !newPassword.isEmpty() || !confirmPassword.isEmpty();
+            if (passwordRequested) {
+                if (currentPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+                    status.setText("비밀번호 변경 시 현재 비밀번호와 새 비밀번호, 확인을 모두 입력하세요.");
+                    return;
+                }
+                if (newPassword.length() < 8 || newPassword.length() > 72) {
+                    status.setText("새 비밀번호는 8~72자로 입력하세요.");
+                    return;
+                }
+                if (!newPassword.equals(confirmPassword)) {
+                    status.setText("새 비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+                    return;
+                }
+            }
+        }
+
         String body = String.join("\t", values);
 
         if (body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > Packet.MAX) {
@@ -575,7 +846,8 @@ public final class SocketDesktop extends JFrame {
             if (c instanceof JPasswordField p) p.setText("");
         }
 
-        request(t, body, p -> {
+        int requestType = t == 15 ? 19 : t;
+        request(requestType, body, p -> {
             if (t == 1) {
                 String[] login = p.body().split("\t", 2);
                 role = p.code() == Packet.SUCCESS ? login[0] : "";
@@ -588,7 +860,21 @@ public final class SocketDesktop extends JFrame {
                 }
             }
 
-            render(p, t);
+            if (t == 15 && p.code() == Packet.SUCCESS) {
+                name = values.get(0);
+                account.setText(switch (role) {
+                    case "MAKER" -> "메이커 · " + name;
+                    case "SUPPORTER" -> "서포터 · " + name;
+                    case "ADMIN" -> "관리자 · " + name;
+                    default -> name;
+                });
+                status.setText(p.body());
+                JOptionPane.showMessageDialog(this, p.body(), "수정 완료", JOptionPane.INFORMATION_MESSAGE);
+                render(p, requestType);
+                return;
+            }
+
+            render(p, requestType);
 
             if (t == 1 || (p.code() == Packet.SUCCESS && (t == 2 || t == 7 || t == 9 || t == 13))) {
                 refresh();
@@ -687,11 +973,6 @@ public final class SocketDesktop extends JFrame {
         int viewRow = catalog.getSelectedRow();
         String id = selected();
         if (id == null || viewRow < 0) return;
-
-        if (role.isEmpty()) {
-            status.setText("상세 및 리워드 사진은 로그인 후 볼 수 있어요.");
-            return;
-        }
 
         int modelRow = catalog.convertRowIndexToModel(viewRow);
         String titleText = String.valueOf(catalogModel.getValueAt(modelRow, 1));
@@ -904,7 +1185,47 @@ public final class SocketDesktop extends JFrame {
                         details.add(desc);
                     }
 
+                    // 리워드별 후원 기능은 프로젝트 상세 화면 안에서 제공한다.
+                    JPanel rewardActions = new JPanel();
+                    rewardActions.setOpaque(false);
+                    rewardActions.setLayout(new BoxLayout(rewardActions, BoxLayout.Y_AXIS));
+                    JButton fundButton = new JButton("이 리워드 후원하기");
+                    fundButton.setEnabled(!role.isEmpty());
+                    fundButton.setToolTipText(role.isEmpty() ? "후원하려면 먼저 로그인하세요." : "선택한 리워드를 후원합니다.");
+                    fundButton.addActionListener(ev -> {
+                        if (!"SUPPORTER".equals(role)) {
+                            JOptionPane.showMessageDialog(dialog,
+                                    role.isEmpty() ? "리워드 후원은 로그인 후 이용할 수 있습니다." : "후원자 계정으로 로그인해야 합니다.",
+                                    "로그인 필요", JOptionPane.INFORMATION_MESSAGE);
+                            return;
+                        }
+                        String quantityText = JOptionPane.showInputDialog(dialog, "후원 수량을 입력하세요.", "1");
+                        if (quantityText == null) return;
+                        int quantity;
+                        try { quantity = Integer.parseInt(quantityText.trim()); }
+                        catch (NumberFormatException ex) {
+                            JOptionPane.showMessageDialog(dialog, "수량은 숫자로 입력하세요."); return;
+                        }
+                        if (quantity <= 0) {
+                            JOptionPane.showMessageDialog(dialog, "수량은 1개 이상이어야 합니다."); return;
+                        }
+                        fundButton.setEnabled(false);
+                        request(4, id + "\t" + r[0] + "\t" + quantity, result -> {
+                            fundButton.setEnabled(true);
+                            if (result.code() == Packet.SUCCESS) {
+                                JOptionPane.showMessageDialog(dialog,
+                                        "후원이 완료되었습니다.\n결제 금액: " + result.body() + "원",
+                                        "후원 완료", JOptionPane.INFORMATION_MESSAGE);
+                                dialog.dispose();
+                                refresh();
+                            } else {
+                                JOptionPane.showMessageDialog(dialog, result.body(), "후원 실패", JOptionPane.WARNING_MESSAGE);
+                            }
+                        });
+                    });
+                    rewardActions.add(fundButton);
                     card.add(details, BorderLayout.CENTER);
+                    card.add(rewardActions, BorderLayout.SOUTH);
 
                     JLabel photo = new JLabel("사진 없음", SwingConstants.CENTER);
                     photo.setOpaque(true);
@@ -1036,6 +1357,56 @@ public final class SocketDesktop extends JFrame {
         ));
     }
 
+    private void appendFundingHistory(String body) {
+        output.add(new JSeparator());
+        JLabel title = new JLabel("내 후원 내역");
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
+        output.add(title);
+
+        if (body == null || body.isBlank()) {
+            output.add(new JLabel("후원 내역이 없습니다."));
+            output.revalidate();
+            output.repaint();
+            return;
+        }
+
+        if (body.startsWith("후원 내역은 후원자 계정")) {
+            output.add(new JLabel(body));
+            output.revalidate();
+            output.repaint();
+            return;
+        }
+
+        String[] lines = body.split("\\n", -1);
+        if (lines.length == 0 || lines[0].isBlank()) {
+            output.add(new JLabel("후원 내역이 없습니다."));
+            output.revalidate();
+            output.repaint();
+            return;
+        }
+
+        DefaultTableModel model = new DefaultTableModel(lines[0].split("\\t", -1), 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        for (int i = 1; i < lines.length; i++) {
+            if (!lines[i].isBlank()) model.addRow(lines[i].split("\\t", -1));
+        }
+        JTable table = new JTable(model);
+        table.setRowHeight(25);
+        table.setAutoCreateRowSorter(true);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        for (int j = 0; j < table.getColumnCount(); j++) {
+            table.getColumnModel().getColumn(j).setPreferredWidth(
+                    Math.max(115, table.getColumnName(j).length() * 10));
+        }
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(570, Math.min(240, 58 + 25 * model.getRowCount())));
+        output.add(scroll);
+        if (model.getRowCount() == 0) output.add(new JLabel("후원 내역이 없습니다."));
+        output.revalidate();
+        output.repaint();
+    }
+
     private void disconnect() {
         if (socket != null) {
             try {
@@ -1098,6 +1469,7 @@ public final class SocketDesktop extends JFrame {
                 case 1 -> name + "님, 로그인되었습니다.";
                 case 2 -> "등록된 프로젝트 ID: " + p.body();
                 case 4 -> "후원 완료 · 금액: " + p.body();
+                case 19 -> "개인정보가 성공적으로 수정되었습니다.";
                 default -> p.body();
             } : p.body();
 

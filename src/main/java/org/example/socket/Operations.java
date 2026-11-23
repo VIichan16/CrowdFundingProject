@@ -50,6 +50,16 @@ final class Operations {
                 return rows(c,q+"p.project_status IN ('진행중','성공','종료','실패') OR p.maker_id=? ORDER BY p.project_id DESC LIMIT 100",u==null?-1:u.getId());
             }
         }
+        // 프로젝트 상세 조회는 비로그인 사용자도 허용한다. (목록 조회와 동일하게 공개 상태만)
+        if(t==3 && f.length==1 && u==null){
+            int id=positive(f[0]);
+            try(var c=DBConnection.getConnection()){
+                require(exists(c,"SELECT 1 FROM project WHERE project_id=? AND project_status IN ('진행중','성공','종료','실패')",id),NOT_FOUND,"공개된 프로젝트가 아닙니다.");
+                String amount="COALESCE((SELECT SUM(f.funding_amount) FROM funding f WHERE f.project_id=project.project_id AND f.funding_status='후원완료'),0)";
+                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct FROM project";
+                return rows(c,detail+" WHERE project_id=?",id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,description,required_amount,remaining_quantity FROM reward WHERE project_id=? ORDER BY reward_id LIMIT 50",id);
+            }
+        }
         require(u!=null,PERMISSION_DENIED,"로그인이 필요합니다.");
         if(t==2||t==7||t==8||t==9||t==12)require("MAKER".equals(u.getRole()),PERMISSION_DENIED,"메이커 전용입니다.");
         if(t==4||t==5||t==6||t==10)require("SUPPORTER".equals(u.getRole()),PERMISSION_DENIED,"후원자 전용입니다.");
@@ -143,7 +153,7 @@ final class Operations {
                 require(exists(c,"SELECT COUNT(*) FROM reward WHERE project_id=? HAVING COUNT(*)>=2 AND SUM(total_quantity>0)>=1",id),REWARD_CONDITION,"리워드 2개 이상, 수량 한정 리워드 1개 이상 필요");
                 String action=last==null?"신청":"재신청";update(c,"INSERT INTO approval_history(project_id,actor_id,action,reason) VALUES (?,?,?,NULL)",id,uid,action);return "승인 "+action+" 완료";
             }
-            case 10:{arity(f,0);return rows(c,"SELECT project_id,reward_id,quantity,funding_amount,funding_date,funding_status FROM funding WHERE supporter_id=? ORDER BY funding_date DESC LIMIT 50",uid);}
+            case 10:{arity(f,0);return rows(c,"SELECT p.project_name AS 프로젝트명,r.reward_name AS 리워드명,f.quantity AS 후원수량,f.funding_amount AS 후원금액,f.funding_date AS 후원일시,f.funding_status AS 후원상태 FROM funding f JOIN project p ON p.project_id=f.project_id LEFT JOIN reward r ON r.reward_id=f.reward_id WHERE f.supporter_id=? ORDER BY f.funding_date DESC LIMIT 50",uid);}
             case 12:{arity(f,1);int id=positive(f[0]);project(c,id,u,true,false);
                 return summary(c," WHERE p.project_id=?",id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,total_quantity,remaining_quantity,COALESCE((SELECT SUM(quantity) FROM funding f WHERE f.reward_id=r.reward_id AND f.funding_status='후원완료'),0) AS pledged_quantity FROM reward r WHERE project_id=?",id)+"\n\n"+rows(c,"SELECT funding_id,reward_id,quantity,funding_amount,funding_status FROM funding WHERE project_id=? ORDER BY funding_id DESC LIMIT 50",id);}
             case 13:{arity(f,3);int id=positive(f[0]);String action=f[1];require(action.equals("승인")||action.equals("거절"),INVALID_INPUT,"승인 또는 거절을 입력하세요.");
@@ -183,6 +193,35 @@ final class Operations {
                 require(path!=null&&path.matches("project-images/[A-Za-z0-9_-]+[.](jpg|png)"),NOT_FOUND,"등록된 대표 사진이 없습니다.");
                 var file=java.nio.file.Path.of(path);require(java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS),NOT_FOUND,"사진 파일 없음");
                 try(var in=java.nio.file.Files.newInputStream(file,java.nio.file.LinkOption.NOFOLLOW_LINKS)){byte[] bytes=in.readNBytes(10 * 1024 * 1024 + 1);require(bytes.length<=10 * 1024 * 1024,INVALID_INPUT,"사진 크기 초과");return java.util.Base64.getEncoder().encodeToString(bytes);}
+            }
+            case 19:{
+                arity(f,6);
+                String newName=text(f[0]).trim();
+                String phone=text(f[1]).trim();
+                String bio=f[2].trim();
+                String currentPassword=f[3];
+                String newPassword=f[4];
+                String confirmPassword=f[5];
+
+                require(newName.length()<=50,INVALID_INPUT,"이름은 50자 이하로 입력하세요.");
+                String digits=phone.replaceAll("[- ]","");
+                require(digits.matches("[0-9]{10,11}"),INVALID_INPUT,"전화번호는 숫자 10~11자리로 입력하세요.");
+                if(digits.length()==11) phone=digits.substring(0,3)+"-"+digits.substring(3,7)+"-"+digits.substring(7);
+                else phone=digits.substring(0,3)+"-"+digits.substring(3,6)+"-"+digits.substring(6);
+                require(bio.length()<=500,INVALID_INPUT,"자기소개는 500자 이하로 입력하세요.");
+                require(!exists(c,"SELECT 1 FROM users WHERE REPLACE(REPLACE(phone_number,'-',''),' ','')=? AND id<>?",digits,uid),INVALID_INPUT,"이미 사용 중인 전화번호입니다.");
+
+                boolean changingPassword=!currentPassword.isEmpty()||!newPassword.isEmpty()||!confirmPassword.isEmpty();
+                if(changingPassword){
+                    require(!currentPassword.isBlank()&&!newPassword.isBlank()&&!confirmPassword.isBlank(),INVALID_INPUT,"비밀번호를 변경하려면 현재 비밀번호, 새 비밀번호, 새 비밀번호 확인을 모두 입력하세요.");
+                    require(newPassword.equals(confirmPassword),INVALID_INPUT,"새 비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+                    require(newPassword.length()>=8&&newPassword.length()<=72,INVALID_INPUT,"새 비밀번호는 8~72자로 입력하세요.");
+                    AuthService.changePassword(c,uid,currentPassword,newPassword);
+                }
+
+                int changed=update(c,"UPDATE users SET name=?, phone_number=?, bio=? WHERE id=?",newName,phone,bio,uid);
+                require(changed==1,NOT_FOUND,"회원정보를 찾을 수 없습니다.");
+                return changingPassword?"개인정보와 비밀번호가 수정되었습니다.":"개인정보 수정 완료";
             }
             default:throw new Failure(FORMAT_ERROR,"지원하지 않는 TYPE");
         }
