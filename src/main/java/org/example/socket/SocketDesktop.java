@@ -1529,10 +1529,12 @@ public final class SocketDesktop extends JFrame {
                                 JOptionPane.showMessageDialog(dialog,
                                         "후원이 완료되었습니다.\n결제 금액: " + result.body() + "원",
                                         "후원 완료", JOptionPane.INFORMATION_MESSAGE);
-                                dialog.dispose();
+
+                                // 후원 완료 후 창을 닫지 않음
                                 refresh();
                             } else {
-                                JOptionPane.showMessageDialog(dialog, result.body(), "후원 실패", JOptionPane.WARNING_MESSAGE);
+                                JOptionPane.showMessageDialog(dialog, result.body(),
+                                        "후원 실패", JOptionPane.WARNING_MESSAGE);
                             }
                         });
                     });
