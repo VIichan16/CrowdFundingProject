@@ -542,14 +542,8 @@ public final class SocketDesktop extends JFrame {
         form.repaint();
     }
 
-
-    /**
-     * 마이페이지 메뉴 한 칸: 왼쪽 버튼 이름, 오른쪽에 보여 줄 화면, 버튼을 눌렀을 때 실행할 데이터 불러오기.
-     * 새 메뉴(예: 4번째 버튼)는 openMyPageDialog의 menus 목록에 한 줄 추가하면 된다.
-     */
     private record MyPageMenu(String title, JComponent view, Runnable onShow) {}
 
-    /** 마이페이지: 왼쪽 메뉴 버튼 + 오른쪽 상세 화면(CardLayout). 오른쪽 위 [나가기]로 창을 닫는다. */
     private void openMyPageDialog() {
         if (role.isEmpty()) {
             JOptionPane.showMessageDialog(this, "로그인 후 이용할 수 있습니다.", "마이페이지", JOptionPane.INFORMATION_MESSAGE);
@@ -566,7 +560,6 @@ public final class SocketDesktop extends JFrame {
         root.setBorder(BorderFactory.createEmptyBorder(22, 24, 22, 24));
         dialog.setContentPane(root);
 
-        // ---------- 상단: 제목 + 나가기 ----------
         JPanel header = new JPanel(new BorderLayout());
         JPanel headingBox = new JPanel();
         headingBox.setLayout(new BoxLayout(headingBox, BoxLayout.Y_AXIS));
@@ -583,7 +576,6 @@ public final class SocketDesktop extends JFrame {
         header.add(exit, BorderLayout.EAST);
         root.add(header, BorderLayout.NORTH);
 
-        // ---------- 내 정보: 보기 화면 ↔ 수정 화면 ----------
         CardLayout infoCards = new CardLayout();
         JPanel infoPanel = new JPanel(infoCards);
 
@@ -647,7 +639,6 @@ public final class SocketDesktop extends JFrame {
             profileForm.add(inputs[i], gbc);
         }
         editView.add(new JScrollPane(profileForm), BorderLayout.CENTER);
-        // 버튼은 입력 칸과 겹치지 않도록 아래 별도 줄(SOUTH)에 둔다.
         JLabel passwordHint = new JLabel("비밀번호를 변경하지 않으려면 비밀번호 입력란을 비워 두세요.");
         passwordHint.setForeground(new Color(110, 110, 110));
         JButton cancelEdit = new JButton("취소");
@@ -665,7 +656,6 @@ public final class SocketDesktop extends JFrame {
         infoPanel.add(infoView, "view");
         infoPanel.add(editView, "edit");
 
-        // 서버(0x000F) 응답: id, login_id, name, role, phone_number, bio
         String[][] profile = {null};
         Runnable clearPasswords = () -> { currentPw.setText(""); newPw.setText(""); confirmPw.setText(""); };
         Runnable loadInfo = () -> {
@@ -749,14 +739,13 @@ public final class SocketDesktop extends JFrame {
                     clearPasswords.run();
                     infoCards.show(infoPanel, "view");
                     JOptionPane.showMessageDialog(dialog, "개인정보가 수정되었습니다.", "저장 완료", JOptionPane.INFORMATION_MESSAGE);
-                    loadInfo.run(); // 수정된 내 정보를 서버에서 다시 불러와 표시
+                    loadInfo.run();
                 } else {
                     JOptionPane.showMessageDialog(dialog, result.body(), "수정 실패", JOptionPane.ERROR_MESSAGE);
                 }
             });
         });
 
-        // ---------- 내 후원 내역 ----------
         JPanel historyPanel = new JPanel(new BorderLayout(10, 10));
         historyPanel.setBorder(BorderFactory.createEmptyBorder(6, 12, 12, 12));
         historyPanel.add(myPageSectionTitle("내가 후원한 프로젝트"), BorderLayout.NORTH);
@@ -815,7 +804,6 @@ public final class SocketDesktop extends JFrame {
                     if (rows[i].isBlank()) continue;
                     String[] cells = rows[i].split("\t", -1);
                     for (int c = 0; c < cells.length; c++) cells[c] = unescapeCell(cells[c]);
-                    // 금액은 천 단위 구분 기호를 적용해 읽기 쉽게 표시한다.
                     if (cells.length > 3) {
                         try {
                             java.math.BigDecimal amount = new java.math.BigDecimal(cells[3]);
@@ -826,7 +814,6 @@ public final class SocketDesktop extends JFrame {
                 }
                 if (historyTable.getColumnModel().getColumnCount() == 8) {
                     historyTable.removeColumn(historyTable.getColumnModel().getColumn(7));
-                    // 프로젝트 ID는 리뷰 작성에만 사용하고 화면에서는 숨긴다.
                     historyTable.removeColumn(historyTable.getColumnModel().getColumn(6));
                 }
                 if (historyTable.getColumnModel().getColumnCount() == 6) {
@@ -858,7 +845,6 @@ public final class SocketDesktop extends JFrame {
             });
         });
 
-        // ---------- 좋아요한 프로젝트 (서버 0x0014 조회, 0x0015 취소) ----------
         JPanel likePanel = new JPanel(new BorderLayout(10, 10));
         likePanel.setBorder(BorderFactory.createEmptyBorder(6, 12, 12, 12));
         likePanel.add(myPageSectionTitle("♥ 좋아요한 프로젝트"), BorderLayout.NORTH);
@@ -866,7 +852,6 @@ public final class SocketDesktop extends JFrame {
             @Override public boolean isCellEditable(int row, int column) { return false; }
         };
         JTable likeTable = myPageTable(likeModel);
-        // 프로젝트 ID 열은 상세 보기·좋아요 취소에만 사용하고 화면에서는 숨긴다.
         likeTable.removeColumn(likeTable.getColumnModel().getColumn(5));
         int[] likeWidths = {300, 140, 100, 110, 140};
         for (int i = 0; i < likeWidths.length; i++)
@@ -911,7 +896,6 @@ public final class SocketDesktop extends JFrame {
             }), () -> likeStatus.setText("다른 요청을 처리 중입니다. 잠시 후 [좋아요한 프로젝트]를 다시 눌러 주세요."));
         };
 
-        // 선택한 행의 {프로젝트 ID, 프로젝트명}. 선택이 없으면 null.
         java.util.function.Supplier<String[]> selectedLike = () -> {
             int viewRow = likeTable.getSelectedRow();
             if (viewRow < 0) return null;
@@ -942,14 +926,12 @@ public final class SocketDesktop extends JFrame {
             });
         });
 
-        // ---------- 메뉴 목록: 여기 한 줄을 추가하면 왼쪽 버튼과 오른쪽 화면이 함께 생긴다 ----------
         List<MyPageMenu> menus = new ArrayList<>();
         menus.add(new MyPageMenu("내 정보", infoPanel, () -> { infoCards.show(infoPanel, "view"); clearPasswords.run(); loadInfo.run(); }));
         if (role.equals("SUPPORTER")) {
             menus.add(new MyPageMenu("내 후원 내역", historyPanel, loadHistory));
             menus.add(new MyPageMenu("좋아요한 프로젝트", likePanel, loadLikes));
         }
-        // 4번째 메뉴 예시: menus.add(new MyPageMenu("버튼 이름", 화면패널, 불러오기동작));
 
         CardLayout contentCards = new CardLayout();
         JPanel content = new JPanel(contentCards);
@@ -985,16 +967,11 @@ public final class SocketDesktop extends JFrame {
 
         dialog.setVisible(true);
 
-        // 처음 열면 "내 정보" 화면을 보여 준다.
         sideButtons.get(0).setSelected(true);
         contentCards.show(content, menus.get(0).title());
         menus.get(0).onShow().run();
     }
 
-    /**
-     * 다른 요청(예: 목록 사진 불러오기)이 끝날 때까지 0.2초 간격으로 최대 5초 기다렸다가 실행한다.
-     * request()는 처리 중이면 요청을 조용히 버리므로, 마이페이지 조회가 사라지지 않도록 한다.
-     */
     private void whenIdle(Runnable action, Runnable gaveUp) {
         whenIdle(action, gaveUp, 25);
     }
@@ -1007,14 +984,12 @@ public final class SocketDesktop extends JFrame {
         retry.start();
     }
 
-    /** 마이페이지 오른쪽 화면의 제목 (기존 마이페이지 제목 스타일과 동일). */
     private JLabel myPageSectionTitle(String text) {
         JLabel label = new JLabel(text);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 19f));
         return label;
     }
 
-    /** 마이페이지 표 공통 스타일 (기존 후원 내역 표와 동일). */
     private JTable myPageTable(DefaultTableModel model) {
         JTable table = new JTable(model);
         table.setRowHeight(42);
@@ -1039,7 +1014,6 @@ public final class SocketDesktop extends JFrame {
         };
     }
 
-    /** 서버 TSV 응답의 역슬래시 이스케이프(\\t, \\n, \\r, \\\\)를 원래 문자로 되돌린다. */
     private static String unescapeCell(String value) {
         if (value.indexOf('\\') < 0) return value;
         StringBuilder out = new StringBuilder(value.length());
@@ -1240,8 +1214,6 @@ public final class SocketDesktop extends JFrame {
             row("입력 없이 조회 버튼을 누르세요.", new JLabel());
         }
 
-        // 프로젝트 메인 화면에서는 오른쪽 '프로젝트 둘러보기' 패널을 완전히 제거하고
-        // 프로젝트 목록/검색 영역을 전체 너비로 사용한다. 다른 기능 화면에서는 기존 분할 레이아웃을 복원한다.
         centerContent.removeAll();
         if (t == 0) {
             mainSplit.setLeftComponent(null);
@@ -1558,10 +1530,6 @@ public final class SocketDesktop extends JFrame {
         openProject(id, titleText, null);
     }
 
-    /**
-     * 프로젝트 ID로 상세 창을 연다. 오른쪽 목록뿐 아니라 마이페이지(좋아요한 프로젝트)에서도 사용한다.
-     * failureOwner가 null이면 기존처럼 메인 화면에 오류를 표시하고, 아니면 해당 창 위에 알림으로 표시한다.
-     */
     private void openProject(String id, String titleText, Component failureOwner) {
         if (busy) return;
 
@@ -1588,11 +1556,12 @@ public final class SocketDesktop extends JFrame {
             dialog.setMinimumSize(new Dimension(900, 620));
             dialog.setLocationRelativeTo(this);
 
-            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 기존 후원 이력 조회용 컬렉션 준비] ▼▼▼
+            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 기존 후원 이력 및 제자리 갱신용 참조 준비] ▼▼▼
             java.util.Set<String> backedRewardIds = new java.util.HashSet<>();
             java.util.Set<String> backedProjectIds = new java.util.HashSet<>();
             List<Runnable> refreshFundButtons = new ArrayList<>();
-            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 기존 후원 이력 조회용 컬렉션 준비] ▲▲▲
+            final Runnable[] reloadDetailRef = new Runnable[1];
+            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 기존 후원 이력 및 제자리 갱신용 참조 준비] ▲▲▲
 
             JPanel root = new JPanel(new BorderLayout(28, 0));
             root.setBackground(Color.WHITE);
@@ -1645,7 +1614,6 @@ public final class SocketDesktop extends JFrame {
             Socket detailSession = socket;
             likeButton.addActionListener(likeEvent -> {
                 likeButton.setEnabled(false);
-                // 이미지 요청이 끝날 때까지 기다린 후 좋아요 요청을 전송한다.
                 Timer timer = new Timer(100, null);
                 timer.addActionListener(event -> {
                     if (!dialog.isDisplayable() || socket != detailSession || !"SUPPORTER".equals(role)) {
@@ -1670,6 +1638,13 @@ public final class SocketDesktop extends JFrame {
             });
             summary.add(likeButton);
             summary.add(Box.createVerticalStrut(16));
+
+            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 모금/달성률/성공배지 제자리 갱신용 참조] ▼▼▼
+            JLabel[] fundingAmountRef = new JLabel[1];
+            JProgressBar[] progressRef = new JProgressBar[1];
+            JLabel[] percentLabelRef = new JLabel[1];
+            JLabel[] successBadgeRef = new JLabel[1];
+            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 모금/달성률/성공배지 제자리 갱신용 참조] ▲▲▲
 
             if (data.length >= 8) {
                 JPanel tags = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -1714,10 +1689,10 @@ public final class SocketDesktop extends JFrame {
                 try {
                     pct = Double.parseDouble(achievement);
                 } catch (Exception ignored) {}
-                pct = Math.max(0.0, pct); // 100% 상한 제거
+                pct = Math.max(0.0, pct);
 
                 int scaled = (int) Math.round(pct * 10);
-                JProgressBar progress = new JProgressBar(0, Math.max(1000, scaled)); // 바 최댓값 확장
+                JProgressBar progress = new JProgressBar(0, Math.max(1000, scaled));
                 progress.setValue(scaled);
                 progress.setStringPainted(false);
                 progress.setForeground(accent);
@@ -1728,7 +1703,6 @@ public final class SocketDesktop extends JFrame {
                 fundingBox.add(progress);
                 fundingBox.add(Box.createVerticalStrut(6));
 
-                // ▼ 여기부터가 방금 추가한 "펀딩 성공!" 표시 부분 ▼
                 JPanel percentRow = new JPanel();
                 percentRow.setOpaque(false);
                 percentRow.setLayout(new BoxLayout(percentRow, BoxLayout.X_AXIS));
@@ -1739,18 +1713,22 @@ public final class SocketDesktop extends JFrame {
                 percentLabel.setFont(percentLabel.getFont().deriveFont(Font.BOLD, 15f));
                 percentRow.add(percentLabel);
 
-                if (pct >= 100.0) {
-                    percentRow.add(Box.createHorizontalStrut(8));
-                    JLabel successBadge = new JLabel("펀딩 성공!");
-                    successBadge.setForeground(new Color(22, 163, 74));
-                    successBadge.setFont(successBadge.getFont().deriveFont(Font.BOLD, 15f));
-                    percentRow.add(successBadge);
-                }
+                JLabel successBadge = new JLabel("펀딩 성공!");
+                successBadge.setForeground(new Color(22, 163, 74));
+                successBadge.setFont(successBadge.getFont().deriveFont(Font.BOLD, 15f));
+                successBadge.setVisible(pct >= 100.0);
+                percentRow.add(Box.createHorizontalStrut(8));
+                percentRow.add(successBadge);
+
+                // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 참조 연결] ▼▼▼
+                fundingAmountRef[0] = fundingAmount;
+                progressRef[0] = progress;
+                percentLabelRef[0] = percentLabel;
+                successBadgeRef[0] = successBadge;
+                // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 참조 연결] ▲▲▲
 
                 fundingBox.add(percentRow);
-
                 fundingBox.add(Box.createVerticalStrut(6));
-
 
                 summary.add(fundingBox);
                 summary.add(Box.createVerticalStrut(13));
@@ -1797,141 +1775,160 @@ public final class SocketDesktop extends JFrame {
             rewards.add(rewardHeader);
             rewards.add(Box.createVerticalStrut(12));
 
-            if (blocks.length == 2) {
-                String[] lines = blocks[1].split("\n");
+            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 리워드 카드 생성 및 추가 후원 처리] ▼▼▼
+            java.util.function.Consumer<String> rebuildRewardCards = rewardBlockText -> {
+                rewards.removeAll();
+                rewardIds.clear();
+                rewardPhotos.clear();
 
-                for (int i = 1; i < lines.length; i++) {
-                    String[] r = lines[i].split("\t", -1);
-                    if (r.length < 5) continue;
-
-                    JPanel card = new JPanel(new BorderLayout(14, 0));
-                    card.setBackground(Color.WHITE);
-                    card.setBorder(BorderFactory.createCompoundBorder(
-                            BorderFactory.createLineBorder(line),
-                            BorderFactory.createEmptyBorder(12, 14, 12, 14)
-                    ));
-                    card.setPreferredSize(new Dimension(680, 166));
-                    card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 166));
-                    card.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-                    JPanel details = new JPanel();
-                    details.setBackground(Color.WHITE);
-                    details.setLayout(new BoxLayout(details, BoxLayout.Y_AXIS));
-
-                    JLabel rewardName = new JLabel(escapeHtml(r[1]));
-                    rewardName.setForeground(ink);
-                    rewardName.setFont(rewardName.getFont().deriveFont(Font.BOLD, 17f));
-                    details.add(rewardName);
-                    details.add(Box.createVerticalStrut(7));
-
-                    JLabel price = new JLabel(formatMoney(r[3]) + "원  ·  " + (r[4].isBlank() ? "수량 제한 없음" : "잔여 " + r[4] + "개"));
-                    price.setForeground(accent);
-                    price.setFont(price.getFont().deriveFont(Font.BOLD, 15f));
-                    details.add(price);
-
-                    if (!r[2].isBlank()) {
-                        details.add(Box.createVerticalStrut(5));
-                        JLabel desc = new JLabel("<html><div style='width:390px;color:#777777'>" + escapeHtml(r[2]) + "</div></html>");
-                        desc.setFont(desc.getFont().deriveFont(14f));
-                        details.add(desc);
+                if (rewardBlockText != null && !rewardBlockText.isBlank()) {
+                    String[] lines = rewardBlockText.split("\n");
+                    for (int i = 1; i < lines.length; i++) {
+                        String[] r = lines[i].split("\t", -1);
+                        if (r.length >= 5) rewardIds.add(r[0]);
                     }
-
-                    // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 리워드 버튼 및 추가 후원 요청 처리] ▼▼▼
-                    JPanel rewardActions = new JPanel();
-                    rewardActions.setOpaque(false);
-                    rewardActions.setLayout(new BoxLayout(rewardActions, BoxLayout.Y_AXIS));
-
-                    String rewardId = r[0].trim();
-                    boolean alreadyBacked = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
-
-                    JButton fundButton = new JButton(alreadyBacked ? "추가 후원하기" : "이 리워드 후원하기");
-                    fundButton.setEnabled("SUPPORTER".equals(role));
-                    fundButton.setToolTipText(
-                            role.isEmpty() ? "후원하려면 먼저 로그인하세요."
-                                    : !"SUPPORTER".equals(role) ? "후원자 계정으로만 후원할 수 있습니다."
-                                    : alreadyBacked ? "이미 후원한 리워드에 추가로 후원합니다." : "선택한 리워드를 후원합니다."
-                    );
-
-                    refreshFundButtons.add(() -> {
-                        boolean nowBacked = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
-                        fundButton.setText(nowBacked ? "추가 후원하기" : "이 리워드 후원하기");
-                        fundButton.setEnabled("SUPPORTER".equals(role));
-                    });
-
-                    fundButton.addActionListener(ev -> {
-                        if (!"SUPPORTER".equals(role)) {
-                            JOptionPane.showMessageDialog(dialog,
-                                    role.isEmpty() ? "리워드 후원은 로그인 후 이용할 수 있습니다." : "후원자 계정으로 로그인해야 합니다.",
-                                    "로그인 필요", JOptionPane.INFORMATION_MESSAGE);
-                            return;
-                        }
-
-                        boolean isAdditional = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
-                        String prompt = isAdditional
-                                ? "이미 후원하신 리워드입니다. 추가로 후원할 수량을 입력하세요."
-                                : "후원 수량을 입력하세요.";
-
-                        String quantityText = JOptionPane.showInputDialog(dialog, prompt, "1");
-                        if (quantityText == null) return;
-
-                        int quantity;
-                        try {
-                            quantity = Integer.parseInt(quantityText.trim());
-                        } catch (NumberFormatException ex) {
-                            JOptionPane.showMessageDialog(dialog, "수량은 숫자로 입력하세요.");
-                            return;
-                        }
-
-                        if (quantity <= 0) {
-                            JOptionPane.showMessageDialog(dialog, "수량은 1개 이상이어야 합니다.");
-                            return;
-                        }
-
-                        fundButton.setEnabled(false);
-                        request(4, id + "\t" + rewardId + "\t" + quantity, result -> {
-                            if (result.code() == Packet.SUCCESS) {
-                                backedRewardIds.add(rewardId);
-                                backedProjectIds.add(id.trim());
-                                fundButton.setText("추가 후원하기");
-                                fundButton.setEnabled(true);
-
-                                JOptionPane.showMessageDialog(dialog,
-                                        (isAdditional ? "추가 후원이 완료되었습니다." : "후원이 완료되었습니다.")
-                                                + "\n결제 금액: " + formatMoney(result.body()) + "원",
-                                        "후원 완료", JOptionPane.INFORMATION_MESSAGE);
-
-                                refresh();
-                                if (dialog.isDisplayable()) {
-                                    dialog.dispose();
-                                    SwingUtilities.invokeLater(() -> openProject(id, titleText, failureOwner));
-                                }
-                            } else {
-                                fundButton.setEnabled(true);
-                                JOptionPane.showMessageDialog(dialog, result.body(),
-                                        "후원 실패", JOptionPane.WARNING_MESSAGE);
-                            }
-                        });
-                    });
-
-                    rewardActions.add(fundButton);
-                    // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 리워드 버튼 및 추가 후원 요청 처리] ▲▲▲
-
-                    card.add(details, BorderLayout.CENTER);
-                    card.add(rewardActions, BorderLayout.SOUTH);
-
-                    JLabel photo = new JLabel("사진 없음", SwingConstants.CENTER);
-                    photo.setOpaque(true);
-                    photo.setBackground(soft);
-                    photo.setForeground(muted);
-                    photo.setBorder(BorderFactory.createLineBorder(line));
-                    photo.setPreferredSize(new Dimension(140, 140));
-                    card.add(photo, BorderLayout.EAST);
-                    rewardPhotos.add(photo);
-
-                    rewards.add(card);
-                    rewards.add(Box.createVerticalStrut(9));
                 }
-            }
+
+                rewardCount.setText(rewardIds.size() + "개");
+                rewards.add(rewardHeader);
+                rewards.add(Box.createVerticalStrut(12));
+
+                if (rewardBlockText != null && !rewardBlockText.isBlank()) {
+                    String[] lines = rewardBlockText.split("\n");
+                    for (int i = 1; i < lines.length; i++) {
+                        String[] r = lines[i].split("\t", -1);
+                        if (r.length < 5) continue;
+
+                        JPanel card = new JPanel(new BorderLayout(14, 0));
+                        card.setBackground(Color.WHITE);
+                        card.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createLineBorder(line),
+                                BorderFactory.createEmptyBorder(12, 14, 12, 14)
+                        ));
+                        card.setPreferredSize(new Dimension(680, 166));
+                        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 166));
+                        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+                        JPanel details = new JPanel();
+                        details.setBackground(Color.WHITE);
+                        details.setLayout(new BoxLayout(details, BoxLayout.Y_AXIS));
+
+                        JLabel rewardName = new JLabel(escapeHtml(r[1]));
+                        rewardName.setForeground(ink);
+                        rewardName.setFont(rewardName.getFont().deriveFont(Font.BOLD, 17f));
+                        details.add(rewardName);
+                        details.add(Box.createVerticalStrut(7));
+
+                        JLabel price = new JLabel(formatMoney(r[3]) + "원  ·  " + (r[4].isBlank() ? "수량 제한 없음" : "잔여 " + r[4] + "개"));
+                        price.setForeground(accent);
+                        price.setFont(price.getFont().deriveFont(Font.BOLD, 15f));
+                        details.add(price);
+
+                        if (!r[2].isBlank()) {
+                            details.add(Box.createVerticalStrut(5));
+                            JLabel desc = new JLabel("<html><div style='width:390px;color:#777777'>" + escapeHtml(r[2]) + "</div></html>");
+                            desc.setFont(desc.getFont().deriveFont(14f));
+                            details.add(desc);
+                        }
+
+                        JPanel rewardActions = new JPanel();
+                        rewardActions.setOpaque(false);
+                        rewardActions.setLayout(new BoxLayout(rewardActions, BoxLayout.Y_AXIS));
+
+                        String rewardId = r[0].trim();
+                        boolean alreadyBacked = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
+
+                        JButton fundButton = new JButton(alreadyBacked ? "추가 후원하기" : "이 리워드 후원하기");
+                        fundButton.setEnabled("SUPPORTER".equals(role));
+                        fundButton.setToolTipText(
+                                role.isEmpty() ? "후원하려면 먼저 로그인하세요."
+                                        : !"SUPPORTER".equals(role) ? "후원자 계정으로만 후원할 수 있습니다."
+                                        : alreadyBacked ? "이미 후원한 리워드에 추가로 후원합니다." : "선택한 리워드를 후원합니다."
+                        );
+
+                        refreshFundButtons.add(() -> {
+                            boolean nowBacked = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
+                            fundButton.setText(nowBacked ? "추가 후원하기" : "이 리워드 후원하기");
+                            fundButton.setEnabled("SUPPORTER".equals(role));
+                        });
+
+                        fundButton.addActionListener(ev -> {
+                            if (!"SUPPORTER".equals(role)) {
+                                JOptionPane.showMessageDialog(dialog,
+                                        role.isEmpty() ? "리워드 후원은 로그인 후 이용할 수 있습니다." : "후원자 계정으로 로그인해야 합니다.",
+                                        "로그인 필요", JOptionPane.INFORMATION_MESSAGE);
+                                return;
+                            }
+
+                            boolean isAdditional = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
+                            String prompt = isAdditional
+                                    ? "이미 후원하신 리워드입니다. 추가로 후원할 수량을 입력하세요."
+                                    : "후원 수량을 입력하세요.";
+
+                            String quantityText = JOptionPane.showInputDialog(dialog, prompt, "1");
+                            if (quantityText == null) return;
+
+                            int quantity;
+                            try {
+                                quantity = Integer.parseInt(quantityText.trim());
+                            } catch (NumberFormatException ex) {
+                                JOptionPane.showMessageDialog(dialog, "수량은 숫자로 입력하세요.");
+                                return;
+                            }
+
+                            if (quantity <= 0) {
+                                JOptionPane.showMessageDialog(dialog, "수량은 1개 이상이어야 합니다.");
+                                return;
+                            }
+
+                            fundButton.setEnabled(false);
+                            request(4, id + "\t" + rewardId + "\t" + quantity, result -> {
+                                fundButton.setEnabled(true);
+                                if (result.code() == Packet.SUCCESS) {
+                                    backedRewardIds.add(rewardId);
+                                    backedProjectIds.add(id.trim());
+                                    fundButton.setText("추가 후원하기");
+
+                                    JOptionPane.showMessageDialog(dialog,
+                                            (isAdditional ? "추가 후원이 완료되었습니다." : "후원이 완료되었습니다.")
+                                                    + "\n결제 금액: " + formatMoney(result.body()) + "원",
+                                            "후원 완료", JOptionPane.INFORMATION_MESSAGE);
+
+                                    refresh();
+                                    if (dialog.isDisplayable() && reloadDetailRef[0] != null) {
+                                        reloadDetailRef[0].run();
+                                    }
+                                } else {
+                                    JOptionPane.showMessageDialog(dialog, result.body(),
+                                            "후원 실패", JOptionPane.WARNING_MESSAGE);
+                                }
+                            });
+                        });
+
+                        rewardActions.add(fundButton);
+                        card.add(details, BorderLayout.CENTER);
+                        card.add(rewardActions, BorderLayout.SOUTH);
+
+                        JLabel photo = new JLabel("사진 없음", SwingConstants.CENTER);
+                        photo.setOpaque(true);
+                        photo.setBackground(soft);
+                        photo.setForeground(muted);
+                        photo.setBorder(BorderFactory.createLineBorder(line));
+                        photo.setPreferredSize(new Dimension(140, 140));
+                        card.add(photo, BorderLayout.EAST);
+                        rewardPhotos.add(photo);
+
+                        rewards.add(card);
+                        rewards.add(Box.createVerticalStrut(9));
+                    }
+                }
+
+                rewards.revalidate();
+                rewards.repaint();
+            };
+
+            rebuildRewardCards.accept(blocks.length == 2 ? blocks[1] : "");
+            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 리워드 카드 생성 및 추가 후원 처리] ▲▲▲
 
             JScrollPane rewardScroll = new JScrollPane(rewards);
             rewardScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -1949,63 +1946,112 @@ public final class SocketDesktop extends JFrame {
             dialog.setContentPane(root);
             dialog.setVisible(true);
 
-            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 내 후원 내역(10번) 비동기 조회 및 버튼 문구 동기화] ▼▼▼
-            if ("SUPPORTER".equals(role)) {
-                Timer historyTimer = new Timer(100, null);
-                historyTimer.addActionListener(event -> {
-                    if (!dialog.isDisplayable() || socket != detailSession || !"SUPPORTER".equals(role)) {
+            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 이미지/후원내역 조회 및 제자리 갱신] ▼▼▼
+            Runnable loadImagesAndHistory = () -> {
+                if ("SUPPORTER".equals(role)) {
+                    Timer historyTimer = new Timer(100, null);
+                    historyTimer.addActionListener(event -> {
+                        if (!dialog.isDisplayable() || socket != detailSession || !"SUPPORTER".equals(role)) {
+                            historyTimer.stop();
+                            return;
+                        }
+                        if (busy) return;
                         historyTimer.stop();
+
+                        request(10, "", historyRes -> {
+                            if (!dialog.isDisplayable()) return;
+                            if (historyRes.code() == Packet.SUCCESS && historyRes.body() != null && !historyRes.body().isBlank()) {
+                                String[] hLines = historyRes.body().split("\n", -1);
+                                for (int idx = 1; idx < hLines.length; idx++) {
+                                    if (hLines[idx].isBlank()) continue;
+                                    String[] cols = hLines[idx].split("\t", -1);
+                                    if (cols.length >= 1) backedProjectIds.add(cols[0].trim());
+                                    if (cols.length >= 2) backedRewardIds.add(cols[1].trim());
+                                    if (cols.length >= 7) {
+                                        backedProjectIds.add(cols[6].trim());
+                                        backedProjectIds.add(cols[cols.length - 1].trim());
+                                    }
+                                }
+                                for (Runnable r : refreshFundButtons) {
+                                    r.run();
+                                }
+                            }
+                        });
+                    });
+                    historyTimer.setInitialDelay(0);
+                    historyTimer.start();
+                }
+
+                request(18, id, res -> {
+                    if (!dialog.isDisplayable()) return;
+
+                    if (res.code() != Packet.SUCCESS) {
+                        hero.setText("대표 이미지를 불러오지 못했습니다.");
+                    } else {
+                        try {
+                            ImageIcon icon = new ImageIcon(java.util.Base64.getDecoder().decode(res.body()));
+                            if (icon.getIconWidth() > 0 && icon.getIconHeight() > 0) {
+                                hero.setText("");
+                                hero.setIcon(scaled(icon, 440, 440));
+                            } else {
+                                hero.setText("대표 이미지가 없습니다.");
+                            }
+                        } catch (IllegalArgumentException ex) {
+                            hero.setText("대표 이미지 데이터 오류");
+                        }
+                    }
+
+                    loadRewardImages(dialog, id, rewardIds, rewardPhotos, 0);
+                });
+            };
+
+            reloadDetailRef[0] = () -> {
+                if (!dialog.isDisplayable()) return;
+                Timer detailTimer = new Timer(100, null);
+                detailTimer.addActionListener(event -> {
+                    if (!dialog.isDisplayable() || socket != detailSession) {
+                        detailTimer.stop();
                         return;
                     }
                     if (busy) return;
-                    historyTimer.stop();
+                    detailTimer.stop();
 
-                    request(10, "", historyRes -> {
-                        if (!dialog.isDisplayable()) return;
-                        if (historyRes.code() == Packet.SUCCESS && historyRes.body() != null && !historyRes.body().isBlank()) {
-                            String[] hLines = historyRes.body().split("\n", -1);
-                            for (int idx = 1; idx < hLines.length; idx++) {
-                                if (hLines[idx].isBlank()) continue;
-                                String[] cols = hLines[idx].split("\t", -1);
-                                if (cols.length >= 1) backedProjectIds.add(cols[0].trim());
-                                if (cols.length >= 2) backedRewardIds.add(cols[1].trim());
-                                if (cols.length >= 7) {
-                                    backedProjectIds.add(cols[6].trim());
-                                    backedProjectIds.add(cols[cols.length - 1].trim());
-                                }
-                            }
-                            for (Runnable r : refreshFundButtons) {
-                                r.run();
+                    request(3, id, updated -> {
+                        if (!dialog.isDisplayable() || updated.code() != Packet.SUCCESS) return;
+                        String[] uBlocks = updated.body().split("\n\n", 2);
+                        String[] uProject = uBlocks[0].split("\n", 2);
+                        String[] uData = uProject.length == 2 ? uProject[1].split("\t", -1) : new String[0];
+
+                        if (uData.length >= 8 && fundingAmountRef[0] != null) {
+                            String uPledged = uData.length > 8 ? uData[8] : "0";
+                            String uAch = uData.length > 9 ? uData[9] : "0";
+                            double uPct = 0;
+                            try {
+                                uPct = Double.parseDouble(uAch);
+                            } catch (Exception ignored) {}
+                            uPct = Math.max(0.0, uPct);
+                            int uScaled = (int) Math.round(uPct * 10);
+
+                            fundingAmountRef[0].setText(formatMoney(uPledged) + "원 모금");
+                            progressRef[0].setMaximum(Math.max(1000, uScaled));
+                            progressRef[0].setValue(uScaled);
+                            percentLabelRef[0].setText(String.format(Locale.KOREA, "목표 달성률 %.2f%%", uPct));
+                            if (successBadgeRef[0] != null) {
+                                successBadgeRef[0].setVisible(uPct >= 100.0);
                             }
                         }
+
+                        refreshFundButtons.clear();
+                        rebuildRewardCards.accept(uBlocks.length == 2 ? uBlocks[1] : "");
+                        loadImagesAndHistory.run();
                     });
                 });
-                historyTimer.setInitialDelay(0);
-                historyTimer.start();
-            }
-            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 내 후원 내역(10번) 비동기 조회 및 버튼 문구 동기화] ▲▲▲
+                detailTimer.setInitialDelay(0);
+                detailTimer.start();
+            };
 
-            request(18, id, res -> {
-                if (!dialog.isDisplayable()) return;
-
-                if (res.code() != Packet.SUCCESS) {
-                    hero.setText("대표 이미지를 불러오지 못했습니다.");
-                } else {
-                    try {
-                        ImageIcon icon = new ImageIcon(java.util.Base64.getDecoder().decode(res.body()));
-                        if (icon.getIconWidth() > 0 && icon.getIconHeight() > 0) {
-                            hero.setText("");
-                            hero.setIcon(scaled(icon, 440, 440));
-                        } else {
-                            hero.setText("대표 이미지가 없습니다.");
-                        }
-                    } catch (IllegalArgumentException ex) {
-                        hero.setText("대표 이미지 데이터 오류");
-                    }
-                }
-
-                loadRewardImages(dialog, id, rewardIds, rewardPhotos, 0);
-            });
+            loadImagesAndHistory.run();
+            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 이미지/후원내역 조회 및 제자리 갱신] ▲▲▲
         });
     }
 
