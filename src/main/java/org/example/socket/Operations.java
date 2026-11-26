@@ -68,7 +68,7 @@ final class Operations {
         }
         if(u==null && t!=17 && t!=18)require(false,PERMISSION_DENIED,"로그인이 필요합니다.");
         if(t==2||t==7||t==8||t==9||t==12)require("MAKER".equals(u.getRole()),PERMISSION_DENIED,"메이커 전용입니다.");
-        if(t==4||t==5||t==6||t==10||t==20||t==21)require("SUPPORTER".equals(u.getRole()),PERMISSION_DENIED,"후원자 전용입니다.");
+        if(t==4||t==5||t==6||t==10||t==20||t==21||t==22)require("SUPPORTER".equals(u.getRole()),PERMISSION_DENIED,"후원자 전용입니다.");
         if(t==13||t==14) require("ADMIN".equals(u.getRole()),PERMISSION_DENIED,"관리자 전용입니다.");
         try(var c=DBConnection.getConnection()){
             if(t==4){arity(f,3);int id=positive(f[0]),rid=positive(f[1]),qty=positive(f[2]);project(c,id,u,false,false);
@@ -169,7 +169,22 @@ final class Operations {
                 require(exists(c,"SELECT COUNT(*) FROM reward WHERE project_id=? HAVING COUNT(*)>=2 AND SUM(total_quantity>0)>=1",id),REWARD_CONDITION,"리워드 2개 이상, 수량 한정 리워드 1개 이상 필요");
                 String action=last==null?"신청":"재신청";update(c,"INSERT INTO approval_history(project_id,actor_id,action,reason) VALUES (?,?,?,NULL)",id,uid,action);return "승인 "+action+" 완료";
             }
-            case 10:{arity(f,0);return rows(c,"SELECT p.project_name AS 프로젝트명,r.reward_name AS 리워드명,f.quantity AS 후원수량,f.funding_amount AS 후원금액,f.funding_date AS 후원일시,f.funding_status AS 후원상태,p.project_id AS project_id FROM funding f JOIN project p ON p.project_id=f.project_id LEFT JOIN reward r ON r.reward_id=f.reward_id WHERE f.supporter_id=? ORDER BY f.funding_date DESC LIMIT 50",uid);}
+            case 22:{
+                arity(f,1); int fid=positive(f[0]); int pid;
+                try(var ps=stmt(c,"SELECT project_id FROM funding WHERE funding_id=? AND supporter_id=?",fid,uid);var rs=ps.executeQuery()){
+                    require(rs.next(),NOT_FOUND,"후원 내역이 없습니다."); pid=rs.getInt(1);
+                }
+                require(exists(c,"SELECT 1 FROM project WHERE project_id=? AND project_status='진행중' AND end_date>=CURRENT_DATE FOR UPDATE",pid),INVALID_STATE,"진행 중인 프로젝트만 취소할 수 있습니다.");
+                int qty; Integer rid;
+                try(var ps=stmt(c,"SELECT reward_id,quantity FROM funding WHERE funding_id=? AND supporter_id=? AND project_id=? AND funding_status='후원완료' FOR UPDATE",fid,uid,pid);var rs=ps.executeQuery()){
+                    require(rs.next(),INVALID_STATE,"이미 취소되었거나 취소할 수 없는 후원입니다.");
+                    rid=rs.getObject(1)==null?null:rs.getInt(1); qty=rs.getInt(2);
+                }
+                if(rid!=null) update(c,"UPDATE reward SET remaining_quantity=remaining_quantity+? WHERE reward_id=? AND project_id=? AND remaining_quantity IS NOT NULL",qty,rid,pid);
+                require(update(c,"DELETE FROM funding WHERE funding_id=? AND supporter_id=? AND funding_status='후원완료'",fid,uid)==1,INVALID_STATE,"후원 취소 실패");
+                return "후원 취소 완료";
+            }
+            case 10:{arity(f,0);return rows(c,"SELECT p.project_name AS 프로젝트명,r.reward_name AS 리워드명,f.quantity AS 후원수량,f.funding_amount AS 후원금액,f.funding_date AS 후원일시,f.funding_status AS 후원상태,p.project_id AS project_id,f.funding_id AS funding_id FROM funding f JOIN project p ON p.project_id=f.project_id LEFT JOIN reward r ON r.reward_id=f.reward_id WHERE f.supporter_id=? ORDER BY f.funding_date DESC LIMIT 50",uid);}
             case 12:{arity(f,1);int id=positive(f[0]);project(c,id,u,true,false);
                 return summary(c," WHERE p.project_id=?",id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,total_quantity,remaining_quantity,COALESCE((SELECT SUM(quantity) FROM funding f WHERE f.reward_id=r.reward_id AND f.funding_status='후원완료'),0) AS pledged_quantity FROM reward r WHERE project_id=?",id)+"\n\n"+rows(c,"SELECT funding_id,reward_id,quantity,funding_amount,funding_status FROM funding WHERE project_id=? ORDER BY funding_id DESC LIMIT 50",id);}
             case 13:{arity(f,3);int id=positive(f[0]);String action=f[1];require(action.equals("승인")||action.equals("거절"),INVALID_INPUT,"승인 또는 거절을 입력하세요.");
