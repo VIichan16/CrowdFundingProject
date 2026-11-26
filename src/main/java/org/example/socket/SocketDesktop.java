@@ -375,7 +375,9 @@ public final class SocketDesktop extends JFrame {
         });
 
         if (!role.isEmpty()) {
-            button("로그아웃", () -> {
+            // ▼▼▼ [메이커 로그아웃 버튼 부제 추가 시작] ▼▼▼
+            String logoutSubtitle = "MAKER".equals(role) ? "메이커 계정" : null;
+            button("로그아웃", logoutSubtitle, () -> {
                 disconnect();
                 role = "";
                 name = "";
@@ -383,6 +385,7 @@ public final class SocketDesktop extends JFrame {
                 page(1);
                 refresh();
             });
+            // ▲▲▲ [메이커 로그아웃 버튼 부제 추가 끝] ▲▲▲
         }
 
         nav.revalidate();
@@ -390,21 +393,37 @@ public final class SocketDesktop extends JFrame {
     }
 
     private void button(String title, Runnable action) {
-        JButton b = new JButton(title);
-        b.setMaximumSize(new Dimension(170, 42));
-        b.setPreferredSize(new Dimension(148, 40));
+        button(title, null, action);
+    }
+
+    // ▼▼▼ [메이커 로그아웃 버튼 부제 지원 button 오버로드 시작] ▼▼▼
+    private void button(String title, String subtitle, Runnable action) {
+        JButton b = new JButton();
+        b.setMaximumSize(new Dimension(170, subtitle == null ? 42 : 52));
+        b.setPreferredSize(new Dimension(152, subtitle == null ? 40 : 50));
         b.setFont(b.getFont().deriveFont(Font.BOLD, 14f));
         b.setFocusPainted(false);
         b.setBackground(Color.WHITE);
         b.setForeground(new Color(47, 58, 70));
         b.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(222, 228, 234)),
-                BorderFactory.createEmptyBorder(7, 15, 7, 15)));
+                BorderFactory.createEmptyBorder(5, 13, 5, 13)));
+
+        if (subtitle == null || subtitle.isBlank()) {
+            b.setText(title);
+        } else {
+            b.setText("<html><div style='text-align:center;line-height:1.15;'>"
+                    + escapeHtml(title)
+                    + "<br><span style='font-size:10px;font-weight:normal;color:#6C7A89;'>"
+                    + escapeHtml(subtitle) + "</span></div></html>");
+        }
+
         b.addActionListener(e -> {
             if (!busy) action.run();
         });
         nav.add(b);
     }
+    // ▲▲▲ [메이커 로그아웃 버튼 부제 지원 button 오버로드 끝] ▲▲▲
 
     private void showLoginDialog() {
         if (busy) return;
