@@ -1716,21 +1716,6 @@ public final class SocketDesktop extends JFrame {
             likeButton.setForeground(Color.BLACK);
             likeButton.setText(liked[0] ? "♥ 좋아요 취소" : "♡ 좋아요");
             likeButton.setEnabled(supporter && likeStateAvailable);
-
-            // ▼▼▼ [평균 별점·리뷰 목록·좋아요 수 시작 - 좋아요 수/평균 별점 표시] ▼▼▼
-            final int[] likeCount = {0};
-            if (data.length > 11) {
-                try { likeCount[0] = Integer.parseInt(data[11].trim()); } catch (NumberFormatException ignored) {}
-            }
-            JLabel likeCountLabel = new JLabel("♥ " + likeCount[0] + "명");
-            likeCountLabel.setForeground(new Color(214, 51, 108));
-            likeCountLabel.setFont(likeCountLabel.getFont().deriveFont(Font.BOLD, 15f));
-            likeCountLabel.setToolTipText("이 프로젝트가 받은 좋아요 수");
-
-            JLabel ratingLabel = new JLabel("★ 리뷰 불러오는 중");
-            ratingLabel.setForeground(new Color(232, 160, 0));
-            ratingLabel.setFont(ratingLabel.getFont().deriveFont(Font.BOLD, 15f));
-            // ▲▲▲ [평균 별점·리뷰 목록·좋아요 수 끝 - 좋아요 수/평균 별점 표시] ▲▲▲
             Socket detailSession = socket;
             likeButton.addActionListener(likeEvent -> {
                 likeButton.setEnabled(false);
@@ -1749,9 +1734,6 @@ public final class SocketDesktop extends JFrame {
                         if (result.code() == Packet.SUCCESS) {
                             liked[0] = !cancel;
                             likeButton.setText(liked[0] ? "♥ 좋아요 취소" : "♡ 좋아요");
-                            // 받은 좋아요 수를 화면에서 바로 +1 / -1
-                            likeCount[0] = Math.max(0, likeCount[0] + (cancel ? -1 : 1));
-                            likeCountLabel.setText("♥ " + likeCount[0] + "명");
                         } else {
                             JOptionPane.showMessageDialog(dialog, result.body(), "좋아요 처리", JOptionPane.INFORMATION_MESSAGE);
                         }
@@ -1759,17 +1741,7 @@ public final class SocketDesktop extends JFrame {
                 });
                 timer.start();
             });
-            // 좋아요 버튼 · 받은 좋아요 수 · 평균 별점을 한 줄로 배치
-            JPanel likeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-            likeRow.setBackground(Color.WHITE);
-            likeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-            likeRow.add(likeButton);
-            likeRow.add(Box.createHorizontalStrut(14));
-            likeRow.add(likeCountLabel);
-            likeRow.add(Box.createHorizontalStrut(18));
-            likeRow.add(ratingLabel);
-            likeRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, likeRow.getPreferredSize().height));
-            summary.add(likeRow);
+            summary.add(likeButton);
             summary.add(Box.createVerticalStrut(16));
 
             // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 모금/달성률/성공배지 제자리 갱신용 참조] ▼▼▼
@@ -2063,80 +2035,7 @@ public final class SocketDesktop extends JFrame {
             rebuildRewardCards.accept(blocks.length == 2 ? blocks[1] : "");
             // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 리워드 카드 생성 및 추가 후원 처리] ▲▲▲
 
-            // ▼▼▼ [평균 별점·리뷰 목록·좋아요 수 시작 - 리뷰 목록 영역] ▼▼▼
-            JPanel reviews = new JPanel();
-            reviews.setBackground(Color.WHITE);
-            reviews.setLayout(new BoxLayout(reviews, BoxLayout.Y_AXIS));
-            reviews.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-            java.util.function.Consumer<Packet> showReviews = res -> {
-                reviews.removeAll();
-
-                JPanel reviewHeader = new JPanel(new BorderLayout());
-                reviewHeader.setBackground(Color.WHITE);
-                reviewHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
-                reviewHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-                JLabel reviewTitle = new JLabel("리뷰");
-                reviewTitle.setForeground(ink);
-                reviewTitle.setFont(reviewTitle.getFont().deriveFont(Font.BOLD, 21f));
-                reviewHeader.add(reviewTitle, BorderLayout.WEST);
-                reviews.add(reviewHeader);
-                reviews.add(Box.createVerticalStrut(12));
-
-                if (res == null || res.code() != Packet.SUCCESS) {
-                    ratingLabel.setText("★ 리뷰 정보 없음");
-                    reviews.add(reviewMessage(res == null ? "리뷰를 불러오지 못했습니다." : res.body(), muted));
-                } else {
-                    // 블록1: avg_rating, review_count / 블록2: 작성자, 별점, 내용, 작성일
-                    String[] rBlocks = res.body().split("\n\n", 2);
-                    String[] head = rBlocks[0].split("\n", 2);
-                    String[] stat = head.length == 2 ? head[1].split("\t", -1) : new String[0];
-                    String avg = stat.length > 0 ? stat[0].trim() : "";
-                    int count = 0;
-                    try { count = stat.length > 1 ? Integer.parseInt(stat[1].trim()) : 0; } catch (NumberFormatException ignored) {}
-
-                    if (count == 0 || avg.isEmpty()) {
-                        ratingLabel.setText("☆ 리뷰 없음");
-                    } else {
-                        double avgValue = 0;
-                        try { avgValue = Double.parseDouble(avg); } catch (NumberFormatException ignored) {}
-                        ratingLabel.setText(stars(avgValue) + "  " + String.format(Locale.KOREA, "%.1f", avgValue) + "  (리뷰 " + count + "개)");
-                    }
-                    reviewTitle.setText("리뷰 " + count + "개");
-
-                    int shown = 0;
-                    if (rBlocks.length == 2) {
-                        String[] lines = rBlocks[1].split("\n");
-                        for (int i = 1; i < lines.length; i++) {
-                            String[] r = lines[i].split("\t", -1);
-                            if (r.length < 3) continue;
-                            int rating = 0;
-                            try { rating = Integer.parseInt(r[1].trim()); } catch (NumberFormatException ignored) {}
-                            reviews.add(reviewCard(unescapeCell(r[0]), rating, unescapeCell(r[2]), r.length > 3 ? r[3] : "", ink, muted, line));
-                            reviews.add(Box.createVerticalStrut(8));
-                            shown++;
-                        }
-                    }
-                    if (shown == 0) reviews.add(reviewMessage("아직 작성된 리뷰가 없습니다.", muted));
-                }
-
-                reviews.revalidate();
-                reviews.repaint();
-            };
-            showReviews.accept(new Packet(23, Packet.SUCCESS, "avg_rating\treview_count\n\t0"));
-            ratingLabel.setText("★ 리뷰 불러오는 중");
-
-            // 리워드 카드 아래에 리뷰 목록을 같은 스크롤 안에 둔다.
-            rewards.setAlignmentX(Component.LEFT_ALIGNMENT);
-            JPanel rewardAndReviews = new JPanel();
-            rewardAndReviews.setBackground(Color.WHITE);
-            rewardAndReviews.setLayout(new BoxLayout(rewardAndReviews, BoxLayout.Y_AXIS));
-            rewardAndReviews.add(rewards);
-            rewardAndReviews.add(Box.createVerticalStrut(22));
-            rewardAndReviews.add(reviews);
-            // ▲▲▲ [평균 별점·리뷰 목록·좋아요 수 끝 - 리뷰 목록 영역] ▲▲▲
-
-            JScrollPane rewardScroll = new JScrollPane(rewardAndReviews);
+            JScrollPane rewardScroll = new JScrollPane(rewards);
             rewardScroll.setBorder(BorderFactory.createEmptyBorder());
             rewardScroll.getViewport().setBackground(Color.WHITE);
             rewardScroll.getVerticalScrollBar().setUnitIncrement(16);
@@ -2188,32 +2087,26 @@ public final class SocketDesktop extends JFrame {
                     historyTimer.start();
                 }
 
-                // 평균 별점·리뷰 목록(TYPE 23)을 먼저 받고, 이어서 대표 이미지(TYPE 18)를 받는다.
-                request(23, id, reviewRes -> {
+                request(18, id, res -> {
                     if (!dialog.isDisplayable()) return;
-                    showReviews.accept(reviewRes);
 
-                    request(18, id, res -> {
-                        if (!dialog.isDisplayable()) return;
-
-                        if (res.code() != Packet.SUCCESS) {
-                            hero.setText("대표 이미지를 불러오지 못했습니다.");
-                        } else {
-                            try {
-                                ImageIcon icon = new ImageIcon(java.util.Base64.getDecoder().decode(res.body()));
-                                if (icon.getIconWidth() > 0 && icon.getIconHeight() > 0) {
-                                    hero.setText("");
-                                    hero.setIcon(scaled(icon, 440, 440));
-                                } else {
-                                    hero.setText("대표 이미지가 없습니다.");
-                                }
-                            } catch (IllegalArgumentException ex) {
-                                hero.setText("대표 이미지 데이터 오류");
+                    if (res.code() != Packet.SUCCESS) {
+                        hero.setText("대표 이미지를 불러오지 못했습니다.");
+                    } else {
+                        try {
+                            ImageIcon icon = new ImageIcon(java.util.Base64.getDecoder().decode(res.body()));
+                            if (icon.getIconWidth() > 0 && icon.getIconHeight() > 0) {
+                                hero.setText("");
+                                hero.setIcon(scaled(icon, 440, 440));
+                            } else {
+                                hero.setText("대표 이미지가 없습니다.");
                             }
+                        } catch (IllegalArgumentException ex) {
+                            hero.setText("대표 이미지 데이터 오류");
                         }
+                    }
 
-                        loadRewardImages(dialog, id, rewardIds, rewardPhotos, 0);
-                    });
+                    loadRewardImages(dialog, id, rewardIds, rewardPhotos, 0);
                 });
             };
 
@@ -2253,13 +2146,6 @@ public final class SocketDesktop extends JFrame {
                             }
                         }
 
-                        if (uData.length > 11) {
-                            try {
-                                likeCount[0] = Integer.parseInt(uData[11].trim());
-                                likeCountLabel.setText("♥ " + likeCount[0] + "명");
-                            } catch (NumberFormatException ignored) {}
-                        }
-
                         refreshFundButtons.clear();
                         rebuildRewardCards.accept(uBlocks.length == 2 ? uBlocks[1] : "");
                         loadImagesAndHistory.run();
@@ -2273,51 +2159,6 @@ public final class SocketDesktop extends JFrame {
             // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 이미지/후원내역 조회 및 제자리 갱신] ▲▲▲
         });
     }
-
-    // ▼▼▼ [평균 별점·리뷰 목록·좋아요 수 시작 - 리뷰 표시 도우미] ▼▼▼
-    private String stars(double rating) {
-        int full = (int) Math.round(Math.max(0, Math.min(5, rating)));
-        return "★".repeat(full) + "☆".repeat(5 - full);
-    }
-
-    private JPanel reviewCard(String writer, int rating, String content, String date, Color ink, Color muted, Color line) {
-        JPanel card = new JPanel();
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(Color.WHITE);
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(line),
-                BorderFactory.createEmptyBorder(10, 14, 10, 14)
-        ));
-        card.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel head = new JLabel("<html><span style='color:#E8A000'>" + stars(rating) + "</span>&nbsp;&nbsp;<b>"
-                + escapeHtml(writer) + "</b>"
-                + (date.isBlank() ? "" : "&nbsp;<span style='color:#70777D'>· " + escapeHtml(date) + "</span>") + "</html>");
-        head.setForeground(ink);
-        head.setFont(head.getFont().deriveFont(14f));
-        head.setAlignmentX(Component.LEFT_ALIGNMENT);
-        card.add(head);
-        card.add(Box.createVerticalStrut(5));
-
-        JLabel body = new JLabel("<html><div style='width:560px'>" + escapeHtml(content) + "</div></html>");
-        body.setForeground(new Color(85, 91, 96));
-        body.setFont(body.getFont().deriveFont(14f));
-        body.setAlignmentX(Component.LEFT_ALIGNMENT);
-        card.add(body);
-
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, card.getPreferredSize().height));
-        return card;
-    }
-
-    private JLabel reviewMessage(String text, Color muted) {
-        JLabel label = new JLabel(text);
-        label.setForeground(muted);
-        label.setFont(label.getFont().deriveFont(14f));
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        label.setBorder(BorderFactory.createEmptyBorder(4, 2, 4, 2));
-        return label;
-    }
-    // ▲▲▲ [평균 별점·리뷰 목록·좋아요 수 끝 - 리뷰 표시 도우미] ▲▲▲
 
     private JPanel infoChip(String value, Color background, Color foreground) {
         JPanel chip = new JPanel(new FlowLayout(FlowLayout.LEFT, 9, 5));
