@@ -1445,6 +1445,7 @@ public final class SocketDesktop extends JFrame {
                 summary.add(description);
             }
 
+            
             JPanel rewards = new JPanel();
             rewards.setBackground(Color.WHITE);
             rewards.setLayout(new BoxLayout(rewards, BoxLayout.Y_AXIS));
