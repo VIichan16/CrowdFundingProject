@@ -1325,6 +1325,33 @@ public final class SocketDesktop extends JFrame {
             }
         }
 
+        // ▼▼▼ [프로젝트 시작일·종료일 유효성 검증 시작] ▼▼▼
+        if (t == 2 || t == 7) {
+            int dateOffset = (t == 7) ? 5 : 4;
+            try {
+                java.time.LocalDate start = java.time.LocalDate.parse(values.get(dateOffset).trim());
+                java.time.LocalDate end = java.time.LocalDate.parse(values.get(dateOffset + 1).trim());
+                if (start.isBefore(java.time.LocalDate.now())) {
+                    String msg = "시작일은 오늘 이후로 입력하세요.";
+                    status.setText(msg);
+                    JOptionPane.showMessageDialog(this, msg, "입력 오류", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if (end.isBefore(start)) {
+                    String msg = "종료일은 시작일 이후로 입력하세요.";
+                    status.setText(msg);
+                    JOptionPane.showMessageDialog(this, msg, "입력 오류", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            } catch (java.time.format.DateTimeParseException ex) {
+                String msg = "날짜는 YYYY-MM-DD 형식으로 입력하세요.";
+                status.setText(msg);
+                JOptionPane.showMessageDialog(this, msg, "형식 오류", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+        // ▲▲▲ [프로젝트 시작일·종료일 유효성 검증 끝] ▲▲▲
+
         if (t == 2) {
             if (projectImage == null) {
                 JOptionPane.showMessageDialog(this, "대표 사진을 먼저 선택하세요. 선택에 성공하면 버튼에 파일명이 표시됩니다.", "사진 첨부 필요", JOptionPane.WARNING_MESSAGE);
