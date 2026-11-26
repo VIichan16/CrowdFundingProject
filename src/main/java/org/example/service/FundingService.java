@@ -1,11 +1,9 @@
 package org.example.service;
 
 import org.example.persistence.DBConnection;
-import org.example.common.AppSupport;
 import org.example.common.BusinessException;
 import java.math.BigDecimal;
 import java.sql.*;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import static org.example.common.AppSupport.*;
@@ -88,30 +86,9 @@ public class FundingService {
                 );
             }
 
-            // 2. 동일 프로젝트의 동일 리워드 중복 신청만 방지
-            // 서로 다른 reward_id는 같은 프로젝트에서도 신청 가능
-            String duplicateSql = """
-                SELECT 1
-                FROM funding
-                WHERE supporter_id = ?
-                  AND project_id = ?
-                  AND reward_id = ?
-                  AND funding_status = '후원완료'
-                """;
+            // 동일 리워드 추가 후원 허용을 위해 중복 신청 차단(duplicateSql) 로직 제거
 
-            if (exists(
-                    conn,
-                    duplicateSql,
-                    supporterId,
-                    projectId,
-                    rewardId
-            )) {
-                throw new BusinessException(
-                        "이미 이 프로젝트의 해당 리워드를 신청했습니다."
-                );
-            }
-
-            // 3. 리워드 행 잠금 및 금액·재고 확인
+            // 2. 리워드 행 잠금 및 금액·재고 확인
             BigDecimal amount;
             Integer remaining;
 
@@ -144,7 +121,7 @@ public class FundingService {
                 }
             }
 
-            // 4. 잔여 수량 확인
+            // 3. 잔여 수량 확인
             // remaining_quantity가 NULL이면 수량 제한 없음
             if (remaining != null && remaining < quantity) {
                 throw new BusinessException(
@@ -154,7 +131,7 @@ public class FundingService {
                 );
             }
 
-            // 5. 수량 제한 리워드의 재고 차감
+            // 4. 수량 제한 리워드의 재고 차감
             if (remaining != null) {
                 String updateSql = """
                     UPDATE reward
@@ -180,7 +157,7 @@ public class FundingService {
                 }
             }
 
-            // 6. 기본 배송지와 함께 펀딩 기록 저장
+            // 5. 기본 배송지와 함께 펀딩 기록 저장
             String fundingSql = """
                 INSERT INTO funding
                 (
@@ -217,7 +194,7 @@ public class FundingService {
                 ps.executeUpdate();
             }
 
-            // 7. 모든 작업 성공 시 커밋
+            // 6. 모든 작업 성공 시 커밋
             conn.commit();
 
             return amount;
@@ -292,28 +269,20 @@ public class FundingService {
                 }
             }
 
-            // 2. 이 프로젝트에 아직 후원하지 않은 서포터 1명 자동 선택
-            //    (1인 1프로젝트 1후원 규칙 때문에 같은 서포터로는 두 번 신청할 수 없음)
+            // 2. 기존 후원 이력과 무관하게 후원자 계정 1명 선택(추가 후원 허용)
             long supporterId;
 
             try (PreparedStatement ps = conn.prepareStatement("""
                     SELECT u.id
                     FROM users u
                     WHERE u.role = 'SUPPORTER'
-                      AND NOT EXISTS (
-                          SELECT 1 FROM funding f
-                          WHERE f.supporter_id = u.id
-                            AND f.project_id = ?
-                            AND f.funding_status = '후원완료')
                     ORDER BY u.id
                     LIMIT 1
                     """)) {
-                ps.setInt(1, projectId);
-
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         throw new BusinessException(
-                                "이 프로젝트에 신청할 수 있는 서포터가 없습니다. initDB를 다시 실행하세요.");
+                                "신청할 수 있는 서포터 계정이 없습니다. initDB를 다시 실행하세요.");
                     }
 
                     supporterId = rs.getLong("id");
