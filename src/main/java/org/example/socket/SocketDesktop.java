@@ -731,7 +731,7 @@ public final class SocketDesktop extends JFrame {
                                 if (cells.length > 3) {
                                     try {
                                         java.math.BigDecimal amount = new java.math.BigDecimal(cells[3]);
-                                        cells[3] = String.format(java.util.Locale.KOREA, "%,.0f원", amount);
+                                        cells[3] = String.format(Locale.KOREA, "%,.0f원", amount);
                                     } catch (NumberFormatException ignored) { }
                                 }
                                 historyModel.addRow(cells);
@@ -1318,13 +1318,14 @@ public final class SocketDesktop extends JFrame {
             JButton likeButton = new JButton("♡ 좋아요");
             final boolean[] liked = {likeStateAvailable && "1".equals(data[10])};
             likeButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+            likeButton.setForeground(Color.BLACK);
             likeButton.setText(liked[0] ? "♥ 좋아요 취소" : "♡ 좋아요");
             likeButton.setEnabled(supporter && likeStateAvailable);
             Socket detailSession = socket;
             likeButton.addActionListener(likeEvent -> {
                 likeButton.setEnabled(false);
                 // 이미지 요청이 끝날 때까지 기다린 후 좋아요 요청을 전송한다.
-                javax.swing.Timer timer = new javax.swing.Timer(100, null);
+                Timer timer = new Timer(100, null);
                 timer.addActionListener(event -> {
                     if (!dialog.isDisplayable() || socket != detailSession || !"SUPPORTER".equals(role)) {
                         timer.stop();
@@ -1332,11 +1333,12 @@ public final class SocketDesktop extends JFrame {
                     }
                     if (busy) return;
                     timer.stop();
-                    request(5, id + "\ttoggle", result -> {
+                    boolean cancel = liked[0];
+                    request(cancel ? 21 : 5, id, result -> {
                         if (!dialog.isDisplayable()) return;
                         likeButton.setEnabled(true);
-                        if (result.code() == Packet.SUCCESS && ("1".equals(result.body()) || "0".equals(result.body()))) {
-                            liked[0] = "1".equals(result.body());
+                        if (result.code() == Packet.SUCCESS) {
+                            liked[0] = !cancel;
                             likeButton.setText(liked[0] ? "♥ 좋아요 취소" : "♡ 좋아요");
                         } else {
                             JOptionPane.showMessageDialog(dialog, result.body(), "좋아요 처리", JOptionPane.INFORMATION_MESSAGE);
@@ -1411,7 +1413,7 @@ public final class SocketDesktop extends JFrame {
                 percentRow.setLayout(new BoxLayout(percentRow, BoxLayout.X_AXIS));
                 percentRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-                JLabel percentLabel = new JLabel(String.format(java.util.Locale.KOREA, "목표 달성률 %.2f%%", pct));
+                JLabel percentLabel = new JLabel(String.format(Locale.KOREA, "목표 달성률 %.2f%%", pct));
                 percentLabel.setForeground(accent);
                 percentLabel.setFont(percentLabel.getFont().deriveFont(Font.BOLD, 13f));
                 percentRow.add(percentLabel);

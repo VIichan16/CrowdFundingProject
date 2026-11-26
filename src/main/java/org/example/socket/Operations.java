@@ -129,8 +129,8 @@ final class Operations {
                     return rows(c,select+" WHERE (maker_id=? OR project_status IN ('진행중','성공','종료','실패')) AND "+column+(column.equals("project_name")?" LIKE ?":" = ?")+" ORDER BY project_id DESC LIMIT 50",uid,column.equals("project_name")?"%"+f[1]+"%":f[1]);}
                 arity(f,1);int id=positive(f[0]);if(!"ADMIN".equals(u.getRole()))project(c,id,u,false,false);
                 String amount="COALESCE((SELECT SUM(f.funding_amount) FROM funding f WHERE f.project_id=project.project_id AND f.funding_status='후원완료'),0)";
-                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct FROM project";
-                return rows(c,detail+" WHERE project_id=?",id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,description,required_amount,remaining_quantity FROM reward WHERE project_id=? ORDER BY reward_id LIMIT 50",id);
+                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct,CASE WHEN EXISTS (SELECT 1 FROM project_like l WHERE l.project_id=project.project_id AND l.supporter_id=?) THEN 1 ELSE 0 END AS liked FROM project";
+                return rows(c,detail+" WHERE project_id=?",uid,id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,description,required_amount,remaining_quantity FROM reward WHERE project_id=? ORDER BY reward_id LIMIT 50",id);
             }
             case 5:{arity(f,1);int id=positive(f[0]);project(c,id,u,false,true);
                 require(!exists(c,"SELECT 1 FROM project_like WHERE project_id=? AND supporter_id=?",id,uid),INVALID_STATE,"이미 좋아요를 눌렀습니다.");
