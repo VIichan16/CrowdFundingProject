@@ -1169,6 +1169,28 @@ public final class SocketDesktop extends JFrame {
         if (t == 3) {
             field("조회 방식", new JComboBox<>(new String[]{"전체 목록", "프로젝트 ID", "제목", "카테고리", "상태"}));
             field("검색값 (전체 목록은 생략)", new JTextField());
+        } else if (t == 12 || t == 7 || t == 8 || t == 9) {
+            JComboBox<MakerProject> choices = new JComboBox<>();
+            field("내 프로젝트 선택", choices);
+            if (t == 7) {
+                for (int i = 1; i < FIELDS[7].length; i++) field(FIELDS[7][i], new JTextField());
+                choices.addActionListener(e -> {
+                    if (type != 7 || fields.size() < 7 || fields.get(0) != choices) return;
+                    MakerProject selected = (MakerProject) choices.getSelectedItem();
+                    for (int i = 1; i <= 6; i++) ((JTextField) fields.get(i)).setText(selected == null ? "" : selected.editFields()[i-1]);
+                });
+            }
+            if (t == 9) row("신청 조건", new JLabel("리워드 2개 이상 · 수량 한정 1개 이상"));
+            submit.setText(t == 7 ? "수정 저장" : t == 8 ? "리워드 등록" : t == 9 ? "승인 신청" : "조회");
+            JButton reload = new JButton("프로젝트 목록 새로고침");
+            reload.addActionListener(e -> loadMakerProjects(choices));
+            row("목록 관리", reload);
+            javax.swing.Timer loader = new javax.swing.Timer(100, null);
+            loader.addActionListener(e -> {
+                if (type != t || fields.isEmpty() || fields.get(0) != choices) { loader.stop(); return; }
+                if (!busy) { loader.stop(); loadMakerProjects(choices); }
+            });
+            loader.start();
         } else if (t == 15) {
             field("이름", new JTextField());
             field("전화번호 (010-0000-0000)", new JTextField());
@@ -1354,6 +1376,16 @@ public final class SocketDesktop extends JFrame {
             }
         }
 
+        if (t == 12 || t == 7 || t == 8 || t == 9) {
+            Object selected = ((JComboBox<?>) fields.get(0)).getSelectedItem();
+            if (!(selected instanceof MakerProject project)) { status.setText("프로젝트를 선택하세요."); return; }
+            if (t != 12 && (!"대기".equals(project.state()) || !(project.approval().isBlank() || "거절".equals(project.approval())))) {
+                JOptionPane.showMessageDialog(this, "미신청 또는 승인 거절된 대기 프로젝트만 처리할 수 있습니다."); return;
+            }
+            values.set(0, project.id());
+            if (t == 9 && JOptionPane.showConfirmDialog(this, project.title() + " 프로젝트의 승인을 신청하시겠습니까?", "승인 신청", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        }
+
         if (t == 14 && values.get(0).isBlank()) values.clear();
 
         for (String s : values) {
@@ -1468,9 +1500,17 @@ public final class SocketDesktop extends JFrame {
                 return;
             }
 
+            if ((t == 7 || t == 8 || t == 9 || t == 12) && type != t) return;
+            if (t == 9 && p.code() == Packet.SUCCESS) {
+                render(p, requestType);
+                page(9);
+                JOptionPane.showMessageDialog(this, p.body());
+                return;
+            }
             render(p, requestType);
 
-            if (t == 1 || (p.code() == Packet.SUCCESS && (t == 2 || t == 7 || t == 9 || t == 13))) {
+            if (t == 7 && p.code() == Packet.SUCCESS) { page(7); JOptionPane.showMessageDialog(this, p.body()); }
+            if (t == 1 || (p.code() == Packet.SUCCESS && (t == 2 || t == 7 || t == 13))) {
                 refresh();
             }
         });
@@ -2256,6 +2296,90 @@ public final class SocketDesktop extends JFrame {
         socket = null;
     }
 
+    private record MakerProject(String id, String title, String category, String state, String[] editFields, String approval) {
+        @Override public String toString() { return title + " · " + category + " · " + state + (approval.isBlank() ? "" : " · 심사: " + approval); }
+    }
+
+    private void loadMakerProjects(JComboBox<MakerProject> choices) {
+        if (busy) { status.setText("요청 처리 중입니다. 목록 새로고침을 눌러 주세요."); return; }
+        int pageType = type;
+        request(12, "", p -> {
+            if (type != pageType || fields.isEmpty() || fields.get(0) != choices) return;
+            if (p.code() != Packet.SUCCESS) { status.setText(p.body()); JOptionPane.showMessageDialog(this, "프로젝트 목록 조회 실패: " + p.body() + "\n서버도 최신 코드로 재실행했는지 확인하세요."); return; }
+            choices.removeAllItems();
+            String[] lines = p.body().split("\n");
+            for (int i = 1; i < lines.length; i++) {
+                String[] d = lines[i].split("\t", -1);
+                if (d.length < 9) continue;
+                for (int j = 0; j < d.length; j++) d[j] = unescapeCell(d[j]);
+
+                choices.addItem(new MakerProject(d[0], d[1], d[2], d[3], new String[]{d[1], d[2], d[4], d[5], d[6], d[7]}, d[8]));
+            }
+            status.setText(choices.getItemCount() == 0 ? "등록된 프로젝트가 없습니다." : "프로젝트 이름을 선택하세요.");
+            if (choices.getItemCount() == 0) JOptionPane.showMessageDialog(this, "등록된 프로젝트가 없거나 목록 응답 형식이 다릅니다. 서버 버전과 로그인 계정을 확인하세요.");
+        });
+    }
+
+    private String makerDisplay(String key, String value) {
+        if (value.isBlank() || value.equals("null")) return key.equals("remaining_quantity") || key.equals("total_quantity") ? "무제한" : "—";
+        try {
+            if (key.equals("target_amount") || key.equals("pledged_amount") || key.equals("funding_amount"))
+                return new java.text.DecimalFormat("#,##0.##").format(new java.math.BigDecimal(value)) + "원";
+            if (key.equals("achievement_pct")) return value + "%";
+        } catch (NumberFormatException ignored) { }
+        return value;
+    }
+
+    private void renderMakerStatus(String body, JPanel target) {
+        var labels = java.util.Map.ofEntries(
+                java.util.Map.entry("project_name", "프로젝트명"), java.util.Map.entry("project_status", "진행 상태"),
+                java.util.Map.entry("maker", "메이커"), java.util.Map.entry("target_amount", "목표 금액"),
+                java.util.Map.entry("pledged_amount", "누적 후원 금액"), java.util.Map.entry("achievement_pct", "달성률"),
+                java.util.Map.entry("approval", "심사 상태"), java.util.Map.entry("reason", "심사 사유"),
+                java.util.Map.entry("reward_name", "리워드명"), java.util.Map.entry("total_quantity", "전체 수량"),
+                java.util.Map.entry("remaining_quantity", "남은 수량"), java.util.Map.entry("pledged_quantity", "후원 수량"),
+                java.util.Map.entry("quantity", "수량"), java.util.Map.entry("funding_amount", "후원 금액"),
+                java.util.Map.entry("funding_status", "후원 상태"));
+        String[] titles = {"프로젝트 요약", "리워드별 현황", "최근 후원 내역 (최대 50건)"};
+        String[] blocks = body.split("\n\n");
+        for (int b = 0; b < Math.min(blocks.length, titles.length); b++) {
+            String[] lines = blocks[b].split("\n");
+            String[] keys = lines[0].split("\t", -1);
+            JLabel heading = new JLabel(titles[b]);
+            heading.setFont(heading.getFont().deriveFont(Font.BOLD, 16f));
+            target.add(heading);
+            if (lines.length < 2) { target.add(new JLabel("조회 결과가 없습니다.")); continue; }
+            if (b == 0) {
+                String[] data = lines[1].split("\t", -1);
+                for (int j = 0; j < Math.min(keys.length, data.length); j++) {
+                    if (!labels.containsKey(keys[j])) continue;
+                    target.add(infoCard(labels.get(keys[j]), makerDisplay(keys[j], data[j])));
+                    if (keys[j].equals("achievement_pct")) {
+                        JProgressBar progress = new JProgressBar(0, 100);
+                        try { progress.setValue(Math.max(0, Math.min(100, new java.math.BigDecimal(data[j]).intValue()))); } catch (NumberFormatException ignored) { }
+                        progress.setStringPainted(true); progress.setString(makerDisplay(keys[j], data[j]));
+                        target.add(progress);
+                    }
+                }
+            } else {
+                var indices = new ArrayList<Integer>();
+                var columns = new ArrayList<String>();
+                for (int j = 0; j < keys.length; j++) if (labels.containsKey(keys[j])) { indices.add(j); columns.add(labels.get(keys[j])); }
+                var model = new DefaultTableModel(columns.toArray(), 0) { public boolean isCellEditable(int r, int c) { return false; } };
+                for (int i = 1; i < lines.length; i++) {
+                    String[] data = lines[i].split("\t", -1);
+                    var values = new ArrayList<String>();
+                    for (int j : indices) values.add(makerDisplay(keys[j], j < data.length ? data[j] : ""));
+                    model.addRow(values.toArray());
+                }
+                JTable table = new JTable(model); table.setRowHeight(30); table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+                for (int j = 0; j < table.getColumnCount(); j++) table.getColumnModel().getColumn(j).setPreferredWidth(115);
+                JScrollPane scroll = new JScrollPane(table); scroll.setPreferredSize(new Dimension(450, Math.min(220, 55 + 30 * model.getRowCount()))); target.add(scroll);
+            }
+            target.add(Box.createVerticalStrut(12));
+        }
+    }
+
     private void render(Packet p, int t) {
         render(p, t, output);
     }
@@ -2266,7 +2390,9 @@ public final class SocketDesktop extends JFrame {
         boolean ok = p.code() == Packet.SUCCESS;
         status.setText(ok ? "요청 완료" : "요청 실패 · " + String.format("CODE 0x%04X", p.code()));
 
-        if (ok && (t == 3 || t == 10 || t == 12 || t == 14 || t == 15)) {
+        if (ok && t == 12) {
+            renderMakerStatus(p.body(), output);
+        } else if (ok && (t == 3 || t == 10 || t == 14 || t == 15)) {
             for (String block : p.body().split("\n\n")) {
                 String[] lines = block.split("\n");
 
