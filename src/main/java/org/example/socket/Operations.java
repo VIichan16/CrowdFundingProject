@@ -39,7 +39,13 @@ final class Operations {
         return new Object[]{text(f[offset]),text(f[offset+1]),f[offset+2],money(f[offset+3]),Date.valueOf(start),Date.valueOf(end)};
     }
     static String run(int t,String[] f,LoginUser u)throws Exception{
-        if(t==11){arity(f,4);AuthService.register(f[0],f[1],f[2],f[3],"SUPPORTER");return "회원가입 완료";}
+        if(t==11){arity(f,4);
+            // 회원가입 실패 원인을 그대로 알려 준다. (SocketServer는 IllegalArgumentException을 "입력값을 확인하세요."로 바꾸므로 여기서 변환)
+            try{AuthService.register(f[0],f[1],f[2],f[3],"SUPPORTER");}
+            catch(NumberFormatException e){throw e;}
+            catch(IllegalArgumentException e){throw new Failure(INVALID_INPUT,e.getMessage()==null||e.getMessage().isBlank()?"입력값을 확인하세요.":e.getMessage());}
+            catch(SQLIntegrityConstraintViolationException e){throw new Failure(INVALID_INPUT,"이미 사용 중인 아이디 또는 전화번호입니다.");}
+            return "회원가입 완료";}
         if(t==16){
             boolean pending=f.length==1&&f[0].equals("pending");
             if(!pending)arity(f,0);
