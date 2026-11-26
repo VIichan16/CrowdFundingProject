@@ -84,6 +84,15 @@ public final class SocketDesktop extends JFrame {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {}
+            Font baseFont = new Font("맑은 고딕", Font.PLAIN, 15);
+            for (String key : new String[]{
+                    "Label.font", "Button.font", "ToggleButton.font", "CheckBox.font",
+                    "RadioButton.font", "ComboBox.font", "TextField.font", "PasswordField.font",
+                    "TextArea.font", "Table.font", "TableHeader.font", "TabbedPane.font",
+                    "OptionPane.messageFont", "OptionPane.buttonFont"
+            }) {
+                UIManager.put(key, baseFont);
+            }
             new SocketDesktop(port).setVisible(true);
         });
     }
@@ -219,16 +228,17 @@ public final class SocketDesktop extends JFrame {
         catalog.setSelectionBackground(new Color(221, 239, 233));
         catalog.setSelectionForeground(new Color(18, 55, 43));
         catalog.getTableHeader().setPreferredSize(new Dimension(0, 34));
-        catalog.setFont(catalog.getFont().deriveFont(14f));
+        catalog.setFont(catalog.getFont().deriveFont(15f));
+        catalog.getTableHeader().setFont(catalog.getTableHeader().getFont().deriveFont(Font.BOLD, 15f));
         catalog.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        catalog.setRowHeight(86);
+        catalog.setRowHeight(112);
         catalog.getColumnModel().getColumn(0).setMinWidth(0);
         catalog.getColumnModel().getColumn(0).setMaxWidth(0);
         catalog.getColumnModel().getColumn(0).setWidth(0);
-        catalog.getColumnModel().getColumn(1).setPreferredWidth(105);
-        catalog.getColumnModel().getColumn(2).setPreferredWidth(360);
-        catalog.getColumnModel().getColumn(3).setPreferredWidth(140);
-        catalog.getColumnModel().getColumn(4).setPreferredWidth(100);
+        catalog.getColumnModel().getColumn(1).setPreferredWidth(140);
+        catalog.getColumnModel().getColumn(2).setPreferredWidth(390);
+        catalog.getColumnModel().getColumn(3).setPreferredWidth(150);
+        catalog.getColumnModel().getColumn(4).setPreferredWidth(110);
         catalog.getColumn("사진").setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean selected,
@@ -974,9 +984,9 @@ public final class SocketDesktop extends JFrame {
     /** 마이페이지 표 공통 스타일 (기존 후원 내역 표와 동일). */
     private JTable myPageTable(DefaultTableModel model) {
         JTable table = new JTable(model);
-        table.setRowHeight(38);
-        table.setFont(table.getFont().deriveFont(Font.PLAIN, 14f));
-        table.getTableHeader().setFont(table.getTableHeader().getFont().deriveFont(Font.BOLD, 14f));
+        table.setRowHeight(42);
+        table.setFont(table.getFont().deriveFont(Font.PLAIN, 15f));
+        table.getTableHeader().setFont(table.getTableHeader().getFont().deriveFont(Font.BOLD, 15f));
         table.getTableHeader().setReorderingAllowed(false);
         table.setAutoCreateRowSorter(true);
         table.setFillsViewportHeight(true);
@@ -1483,7 +1493,7 @@ public final class SocketDesktop extends JFrame {
                 try {
                     ImageIcon image = new ImageIcon(java.util.Base64.getDecoder().decode(result.body()));
                     if (image.getIconWidth() > 0 && image.getIconHeight() > 0) {
-                        catalogModel.setValueAt(scaled(image, 92, 76), modelRow, 1);
+                        catalogModel.setValueAt(scaled(image, 126, 96), modelRow, 1);
                     }
                 } catch (IllegalArgumentException ignored) {}
             }
@@ -1551,14 +1561,14 @@ public final class SocketDesktop extends JFrame {
 
             JPanel left = new JPanel(new BorderLayout(0, 12));
             left.setBackground(Color.WHITE);
-            left.setPreferredSize(new Dimension(420, 0));
+            left.setPreferredSize(new Dimension(450, 0));
 
             JLabel hero = new JLabel("대표 이미지를 불러오는 중", SwingConstants.CENTER);
             hero.setOpaque(true);
             hero.setBackground(soft);
             hero.setForeground(muted);
             hero.setBorder(BorderFactory.createLineBorder(line));
-            hero.setPreferredSize(new Dimension(420, 420));
+            hero.setPreferredSize(new Dimension(450, 450));
             left.add(hero, BorderLayout.CENTER);
 
             JLabel imageLabel = new JLabel("PROJECT IMAGE");
@@ -1581,7 +1591,7 @@ public final class SocketDesktop extends JFrame {
 
             JLabel title = new JLabel("<html><div style='width:570px'>" + escapeHtml(titleText) + "</div></html>");
             title.setForeground(ink);
-            title.setFont(title.getFont().deriveFont(Font.BOLD, 29f));
+            title.setFont(title.getFont().deriveFont(Font.BOLD, 32f));
             summary.add(title);
             summary.add(Box.createVerticalStrut(12));
 
@@ -1657,7 +1667,7 @@ public final class SocketDesktop extends JFrame {
                 String achievement = data.length > 9 ? data[9] : "0";
                 JLabel fundingAmount = new JLabel(formatMoney(pledged) + "원 모금");
                 fundingAmount.setForeground(ink);
-                fundingAmount.setFont(fundingAmount.getFont().deriveFont(Font.BOLD, 22f));
+                fundingAmount.setFont(fundingAmount.getFont().deriveFont(Font.BOLD, 24f));
                 fundingBox.add(fundingAmount);
                 fundingBox.add(Box.createVerticalStrut(8));
 
@@ -1687,14 +1697,14 @@ public final class SocketDesktop extends JFrame {
 
                 JLabel percentLabel = new JLabel(String.format(Locale.KOREA, "목표 달성률 %.2f%%", pct));
                 percentLabel.setForeground(accent);
-                percentLabel.setFont(percentLabel.getFont().deriveFont(Font.BOLD, 13f));
+                percentLabel.setFont(percentLabel.getFont().deriveFont(Font.BOLD, 15f));
                 percentRow.add(percentLabel);
 
                 if (pct >= 100.0) {
                     percentRow.add(Box.createHorizontalStrut(8));
                     JLabel successBadge = new JLabel("펀딩 성공!");
                     successBadge.setForeground(new Color(22, 163, 74));
-                    successBadge.setFont(successBadge.getFont().deriveFont(Font.BOLD, 13f));
+                    successBadge.setFont(successBadge.getFont().deriveFont(Font.BOLD, 15f));
                     percentRow.add(successBadge);
                 }
 
@@ -1710,7 +1720,7 @@ public final class SocketDesktop extends JFrame {
                 description.setEditable(false);
                 description.setLineWrap(true);
                 description.setWrapStyleWord(true);
-                description.setFont(description.getFont().deriveFont(13f));
+                description.setFont(description.getFont().deriveFont(15f));
                 description.setForeground(new Color(85, 91, 96));
                 description.setBackground(Color.WHITE);
                 description.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
@@ -1727,7 +1737,7 @@ public final class SocketDesktop extends JFrame {
             rewardHeader.setBackground(Color.WHITE);
             JLabel rewardTitle = new JLabel("리워드 구성");
             rewardTitle.setForeground(ink);
-            rewardTitle.setFont(rewardTitle.getFont().deriveFont(Font.BOLD, 19f));
+            rewardTitle.setFont(rewardTitle.getFont().deriveFont(Font.BOLD, 21f));
             rewardHeader.add(rewardTitle, BorderLayout.WEST);
 
             ArrayList<String> rewardIds = new ArrayList<>();
@@ -1761,8 +1771,8 @@ public final class SocketDesktop extends JFrame {
                             BorderFactory.createLineBorder(line),
                             BorderFactory.createEmptyBorder(12, 14, 12, 14)
                     ));
-                    card.setPreferredSize(new Dimension(650, 142));
-                    card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 142));
+                    card.setPreferredSize(new Dimension(680, 166));
+                    card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 166));
                     card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
                     JPanel details = new JPanel();
@@ -1771,19 +1781,19 @@ public final class SocketDesktop extends JFrame {
 
                     JLabel rewardName = new JLabel(escapeHtml(r[1]));
                     rewardName.setForeground(ink);
-                    rewardName.setFont(rewardName.getFont().deriveFont(Font.BOLD, 15f));
+                    rewardName.setFont(rewardName.getFont().deriveFont(Font.BOLD, 17f));
                     details.add(rewardName);
                     details.add(Box.createVerticalStrut(7));
 
                     JLabel price = new JLabel(formatMoney(r[3]) + "원  ·  " + (r[4].isBlank() ? "수량 제한 없음" : "잔여 " + r[4] + "개"));
                     price.setForeground(accent);
-                    price.setFont(price.getFont().deriveFont(Font.BOLD, 13f));
+                    price.setFont(price.getFont().deriveFont(Font.BOLD, 15f));
                     details.add(price);
 
                     if (!r[2].isBlank()) {
                         details.add(Box.createVerticalStrut(5));
                         JLabel desc = new JLabel("<html><div style='width:390px;color:#777777'>" + escapeHtml(r[2]) + "</div></html>");
-                        desc.setFont(desc.getFont().deriveFont(12f));
+                        desc.setFont(desc.getFont().deriveFont(14f));
                         details.add(desc);
                     }
 
@@ -1836,7 +1846,7 @@ public final class SocketDesktop extends JFrame {
                     photo.setBackground(soft);
                     photo.setForeground(muted);
                     photo.setBorder(BorderFactory.createLineBorder(line));
-                    photo.setPreferredSize(new Dimension(116, 116));
+                    photo.setPreferredSize(new Dimension(140, 140));
                     card.add(photo, BorderLayout.EAST);
                     rewardPhotos.add(photo);
 
@@ -1871,7 +1881,7 @@ public final class SocketDesktop extends JFrame {
                         ImageIcon icon = new ImageIcon(java.util.Base64.getDecoder().decode(res.body()));
                         if (icon.getIconWidth() > 0 && icon.getIconHeight() > 0) {
                             hero.setText("");
-                            hero.setIcon(scaled(icon, 410, 410));
+                            hero.setIcon(scaled(icon, 440, 440));
                         } else {
                             hero.setText("대표 이미지가 없습니다.");
                         }
@@ -1940,7 +1950,7 @@ public final class SocketDesktop extends JFrame {
                     if (icon.getIconWidth() > 0 && icon.getIconHeight() > 0) {
                         JLabel photo = photos.get(index);
                         photo.setText("");
-                        photo.setIcon(scaled(icon, 110, 110));
+                        photo.setIcon(scaled(icon, 134, 134));
                         photo.setToolTipText("리워드 사진");
                         photo.revalidate();
                         photo.repaint();
