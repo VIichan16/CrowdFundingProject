@@ -24,7 +24,7 @@ public final class SocketServer {
                 if(p==null)return;
                 int code=SUCCESS; String body;
                 try{
-                    if(p.code()!=REQUEST||p.type()<1||p.type()>22)throw new Operations.Failure(FORMAT_ERROR,"TYPE 또는 CODE 오류");
+                    if(p.code()!=REQUEST||p.type()<1||p.type()>23)throw new Operations.Failure(FORMAT_ERROR,"TYPE 또는 CODE 오류");
                     String[] fields=p.body().isEmpty()?new String[0]:p.body().split("\t",-1);
                     if(p.type()==1){user=null; Operations.arity(fields,2);Operations.text(fields[0]);Operations.text(fields[1]);
                         user=AuthService.login(fields[0],fields[1]);

@@ -62,11 +62,11 @@ final class Operations {
             try(var c=DBConnection.getConnection()){
                 require(exists(c,"SELECT 1 FROM project WHERE project_id=? AND project_status IN ('진행중','성공','종료','실패')",id),NOT_FOUND,"공개된 프로젝트가 아닙니다.");
                 String amount="COALESCE((SELECT SUM(f.funding_amount) FROM funding f WHERE f.project_id=project.project_id AND f.funding_status='후원완료'),0)";
-                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct FROM project";
+                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct,0 AS liked,(SELECT COUNT(*) FROM project_like lc WHERE lc.project_id=project.project_id) AS like_count FROM project";
                 return rows(c,detail+" WHERE project_id=?",id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,description,required_amount,remaining_quantity FROM reward WHERE project_id=? ORDER BY reward_id LIMIT 50",id);
             }
         }
-        if(u==null && t!=17 && t!=18)require(false,PERMISSION_DENIED,"로그인이 필요합니다.");
+        if(u==null && t!=17 && t!=18 && t!=23)require(false,PERMISSION_DENIED,"로그인이 필요합니다.");
         if(t==2||t==7||t==8||t==9||t==12)require("MAKER".equals(u.getRole()),PERMISSION_DENIED,"메이커 전용입니다.");
         if(t==4||t==5||t==6||t==10||t==20||t==21||t==22)require("SUPPORTER".equals(u.getRole()),PERMISSION_DENIED,"후원자 전용입니다.");
         if(t==13||t==14) require("ADMIN".equals(u.getRole()),PERMISSION_DENIED,"관리자 전용입니다.");
@@ -135,7 +135,7 @@ final class Operations {
                     return rows(c,select+" WHERE (maker_id=? OR project_status IN ('진행중','성공','종료','실패')) AND "+column+(column.equals("project_name")?" LIKE ?":" = ?")+" ORDER BY project_id DESC LIMIT 50",uid,column.equals("project_name")?"%"+f[1]+"%":f[1]);}
                 arity(f,1);int id=positive(f[0]);if(!"ADMIN".equals(u.getRole()))project(c,id,u,false,false);
                 String amount="COALESCE((SELECT SUM(f.funding_amount) FROM funding f WHERE f.project_id=project.project_id AND f.funding_status='후원완료'),0)";
-                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct,CASE WHEN EXISTS (SELECT 1 FROM project_like l WHERE l.project_id=project.project_id AND l.supporter_id=?) THEN 1 ELSE 0 END AS liked FROM project";
+                String detail="SELECT project_id,project_name,category,description,target_amount,start_date,end_date,project_status,"+amount+" AS pledged_amount,ROUND(100*"+amount+"/NULLIF(target_amount,0),2) AS achievement_pct,CASE WHEN EXISTS (SELECT 1 FROM project_like l WHERE l.project_id=project.project_id AND l.supporter_id=?) THEN 1 ELSE 0 END AS liked,(SELECT COUNT(*) FROM project_like lc WHERE lc.project_id=project.project_id) AS like_count FROM project";
                 return rows(c,detail+" WHERE project_id=?",uid,id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,description,required_amount,remaining_quantity FROM reward WHERE project_id=? ORDER BY reward_id LIMIT 50",id);
             }
             case 5:{arity(f,1);int id=positive(f[0]);project(c,id,u,false,true);
@@ -227,6 +227,15 @@ final class Operations {
                 require(path!=null&&path.matches("project-images/[A-Za-z0-9_-]+[.](jpg|png)"),NOT_FOUND,"등록된 대표 사진이 없습니다.");
                 var file=java.nio.file.Path.of(path);require(java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS),NOT_FOUND,"사진 파일 없음");
                 try(var in=java.nio.file.Files.newInputStream(file,java.nio.file.LinkOption.NOFOLLOW_LINKS)){byte[] bytes=in.readNBytes(10 * 1024 * 1024 + 1);require(bytes.length<=10 * 1024 * 1024,INVALID_INPUT,"사진 크기 초과");return java.util.Base64.getEncoder().encodeToString(bytes);}
+            }
+            case 23:{arity(f,1);int id=positive(f[0]);
+                // 프로젝트 상세 화면의 평균 별점과 리뷰 목록. 권한은 상세 조회(TYPE 3)와 같다. (비로그인은 공개 프로젝트만)
+                if(u==null){require(exists(c,"SELECT 1 FROM project WHERE project_id=? AND project_status IN ('진행중','성공','종료','실패')",id),PERMISSION_DENIED,"공개된 프로젝트가 아닙니다.");}
+                else if(!"ADMIN".equals(u.getRole()))project(c,id,u,false,false);
+                // 작성자 이름은 첫 글자와 마지막 글자만 남기고 가운데를 *로 가린다. (예: 이서포터 → 이**터, 홍길 → 홍*)
+                String masked="CASE WHEN CHAR_LENGTH(u.name)<=1 THEN u.name WHEN CHAR_LENGTH(u.name)=2 THEN CONCAT(LEFT(u.name,1),'*') ELSE CONCAT(LEFT(u.name,1),REPEAT('*',CHAR_LENGTH(u.name)-2),RIGHT(u.name,1)) END";
+                return rows(c,"SELECT ROUND(AVG(rating),1) AS avg_rating,COUNT(*) AS review_count FROM project_review WHERE project_id=?",id)
+                        +"\n\n"+rows(c,"SELECT "+masked+" AS 작성자,rv.rating AS 별점,rv.content AS 내용,DATE_FORMAT(rv.created_at,'%Y-%m-%d') AS 작성일 FROM project_review rv JOIN users u ON u.id=rv.supporter_id WHERE rv.project_id=? ORDER BY rv.review_id DESC LIMIT 50",id);
             }
             case 19:{
                 arity(f,6);
