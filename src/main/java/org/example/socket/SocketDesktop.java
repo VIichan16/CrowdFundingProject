@@ -163,24 +163,27 @@ public final class SocketDesktop extends JFrame {
                 BorderFactory.createEmptyBorder(14, 14, 14, 14)));
         catalogPanel.setBackground(Color.WHITE);
 
-        JPanel actions = new JPanel(new GridLayout(0, 2, 4, 4));
         JButton refreshBtn = new JButton("새로고침");
-        JButton detail = new JButton("상세·리워드 사진");
+JButton detail = new JButton("상세·리워드 사진");
 
-        actions.add(refreshBtn);
-        actions.add(pending);
-        actions.add(detail);
-        actions.add(approve);
+JPanel actions = new JPanel(new GridLayout(1, 0, 4, 4));
+actions.add(detail);
+actions.add(pending);
+actions.add(approve);
 
-        JPanel filterBar = new JPanel(new GridLayout(2, 2, 4, 4));
-        filterBar.add(categoryFilter);
-        filterBar.add(statusFilter);
-        filterBar.add(keywordFilter);
-        filterBar.add(sortOption);
+JPanel filterBar = new JPanel(new GridLayout(2, 2, 4, 4));
+filterBar.add(categoryFilter);
+filterBar.add(statusFilter);
+filterBar.add(keywordFilter);
+filterBar.add(sortOption);
 
-        JPanel catalogTop = new JPanel(new BorderLayout(0, 4));
-        catalogTop.add(actions, BorderLayout.NORTH);
-        catalogTop.add(filterBar, BorderLayout.SOUTH);
+JPanel filterArea = new JPanel(new BorderLayout(8, 0));
+filterArea.add(filterBar, BorderLayout.CENTER);
+filterArea.add(refreshBtn, BorderLayout.EAST);
+
+JPanel catalogTop = new JPanel(new BorderLayout(0, 4));
+catalogTop.add(actions, BorderLayout.NORTH);
+catalogTop.add(filterArea, BorderLayout.SOUTH);
 
         catalogPanel.add(catalogTop, BorderLayout.NORTH);
         JScrollPane catalogScroll = new JScrollPane(catalog);
