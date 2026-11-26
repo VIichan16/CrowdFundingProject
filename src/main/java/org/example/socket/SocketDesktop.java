@@ -819,7 +819,7 @@ public final class SocketDesktop extends JFrame {
                     if (cells.length > 3) {
                         try {
                             java.math.BigDecimal amount = new java.math.BigDecimal(cells[3]);
-                            cells[3] = String.format(java.util.Locale.KOREA, "%,.0f원", amount);
+                            cells[3] = String.format(Locale.KOREA, "%,.0f원", amount);
                         } catch (NumberFormatException ignored) { }
                     }
                     historyModel.addRow(cells);
@@ -1002,7 +1002,7 @@ public final class SocketDesktop extends JFrame {
     private void whenIdle(Runnable action, Runnable gaveUp, int triesLeft) {
         if (!busy) { action.run(); return; }
         if (triesLeft <= 0) { gaveUp.run(); return; }
-        javax.swing.Timer retry = new javax.swing.Timer(200, e -> whenIdle(action, gaveUp, triesLeft - 1));
+        Timer retry = new Timer(200, e -> whenIdle(action, gaveUp, triesLeft - 1));
         retry.setRepeats(false);
         retry.start();
     }
@@ -1588,6 +1588,12 @@ public final class SocketDesktop extends JFrame {
             dialog.setMinimumSize(new Dimension(900, 620));
             dialog.setLocationRelativeTo(this);
 
+            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 기존 후원 이력 조회용 컬렉션 준비] ▼▼▼
+            java.util.Set<String> backedRewardIds = new java.util.HashSet<>();
+            java.util.Set<String> backedProjectIds = new java.util.HashSet<>();
+            List<Runnable> refreshFundButtons = new ArrayList<>();
+            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 기존 후원 이력 조회용 컬렉션 준비] ▲▲▲
+
             JPanel root = new JPanel(new BorderLayout(28, 0));
             root.setBackground(Color.WHITE);
             root.setBorder(BorderFactory.createEmptyBorder(26, 28, 26, 28));
@@ -1830,13 +1836,28 @@ public final class SocketDesktop extends JFrame {
                         details.add(desc);
                     }
 
-                    // 리워드별 후원 기능은 프로젝트 상세 화면 안에서 제공한다.
+                    // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 리워드 버튼 및 추가 후원 요청 처리] ▼▼▼
                     JPanel rewardActions = new JPanel();
                     rewardActions.setOpaque(false);
                     rewardActions.setLayout(new BoxLayout(rewardActions, BoxLayout.Y_AXIS));
-                    JButton fundButton = new JButton("이 리워드 후원하기");
-                    fundButton.setEnabled(!role.isEmpty());
-                    fundButton.setToolTipText(role.isEmpty() ? "후원하려면 먼저 로그인하세요." : "선택한 리워드를 후원합니다.");
+
+                    String rewardId = r[0].trim();
+                    boolean alreadyBacked = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
+
+                    JButton fundButton = new JButton(alreadyBacked ? "추가 후원하기" : "이 리워드 후원하기");
+                    fundButton.setEnabled("SUPPORTER".equals(role));
+                    fundButton.setToolTipText(
+                            role.isEmpty() ? "후원하려면 먼저 로그인하세요."
+                                    : !"SUPPORTER".equals(role) ? "후원자 계정으로만 후원할 수 있습니다."
+                                    : alreadyBacked ? "이미 후원한 리워드에 추가로 후원합니다." : "선택한 리워드를 후원합니다."
+                    );
+
+                    refreshFundButtons.add(() -> {
+                        boolean nowBacked = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
+                        fundButton.setText(nowBacked ? "추가 후원하기" : "이 리워드 후원하기");
+                        fundButton.setEnabled("SUPPORTER".equals(role));
+                    });
+
                     fundButton.addActionListener(ev -> {
                         if (!"SUPPORTER".equals(role)) {
                             JOptionPane.showMessageDialog(dialog,
@@ -1844,33 +1865,57 @@ public final class SocketDesktop extends JFrame {
                                     "로그인 필요", JOptionPane.INFORMATION_MESSAGE);
                             return;
                         }
-                        String quantityText = JOptionPane.showInputDialog(dialog, "후원 수량을 입력하세요.", "1");
+
+                        boolean isAdditional = backedRewardIds.contains(rewardId) || backedProjectIds.contains(id.trim());
+                        String prompt = isAdditional
+                                ? "이미 후원하신 리워드입니다. 추가로 후원할 수량을 입력하세요."
+                                : "후원 수량을 입력하세요.";
+
+                        String quantityText = JOptionPane.showInputDialog(dialog, prompt, "1");
                         if (quantityText == null) return;
+
                         int quantity;
-                        try { quantity = Integer.parseInt(quantityText.trim()); }
-                        catch (NumberFormatException ex) {
-                            JOptionPane.showMessageDialog(dialog, "수량은 숫자로 입력하세요."); return;
+                        try {
+                            quantity = Integer.parseInt(quantityText.trim());
+                        } catch (NumberFormatException ex) {
+                            JOptionPane.showMessageDialog(dialog, "수량은 숫자로 입력하세요.");
+                            return;
                         }
+
                         if (quantity <= 0) {
-                            JOptionPane.showMessageDialog(dialog, "수량은 1개 이상이어야 합니다."); return;
+                            JOptionPane.showMessageDialog(dialog, "수량은 1개 이상이어야 합니다.");
+                            return;
                         }
+
                         fundButton.setEnabled(false);
-                        request(4, id + "\t" + r[0] + "\t" + quantity, result -> {
-                            fundButton.setEnabled(true);
+                        request(4, id + "\t" + rewardId + "\t" + quantity, result -> {
                             if (result.code() == Packet.SUCCESS) {
+                                backedRewardIds.add(rewardId);
+                                backedProjectIds.add(id.trim());
+                                fundButton.setText("추가 후원하기");
+                                fundButton.setEnabled(true);
+
                                 JOptionPane.showMessageDialog(dialog,
-                                        "후원이 완료되었습니다.\n결제 금액: " + result.body() + "원",
+                                        (isAdditional ? "추가 후원이 완료되었습니다." : "후원이 완료되었습니다.")
+                                                + "\n결제 금액: " + formatMoney(result.body()) + "원",
                                         "후원 완료", JOptionPane.INFORMATION_MESSAGE);
 
-                                // 후원 완료 후 창을 닫지 않음
                                 refresh();
+                                if (dialog.isDisplayable()) {
+                                    dialog.dispose();
+                                    SwingUtilities.invokeLater(() -> openProject(id, titleText, failureOwner));
+                                }
                             } else {
+                                fundButton.setEnabled(true);
                                 JOptionPane.showMessageDialog(dialog, result.body(),
                                         "후원 실패", JOptionPane.WARNING_MESSAGE);
                             }
                         });
                     });
+
                     rewardActions.add(fundButton);
+                    // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 리워드 버튼 및 추가 후원 요청 처리] ▲▲▲
+
                     card.add(details, BorderLayout.CENTER);
                     card.add(rewardActions, BorderLayout.SOUTH);
 
@@ -1903,6 +1948,42 @@ public final class SocketDesktop extends JFrame {
 
             dialog.setContentPane(root);
             dialog.setVisible(true);
+
+            // ▼▼▼ [리워드 추가 후원 기능 수정 시작 - 내 후원 내역(10번) 비동기 조회 및 버튼 문구 동기화] ▼▼▼
+            if ("SUPPORTER".equals(role)) {
+                Timer historyTimer = new Timer(100, null);
+                historyTimer.addActionListener(event -> {
+                    if (!dialog.isDisplayable() || socket != detailSession || !"SUPPORTER".equals(role)) {
+                        historyTimer.stop();
+                        return;
+                    }
+                    if (busy) return;
+                    historyTimer.stop();
+
+                    request(10, "", historyRes -> {
+                        if (!dialog.isDisplayable()) return;
+                        if (historyRes.code() == Packet.SUCCESS && historyRes.body() != null && !historyRes.body().isBlank()) {
+                            String[] hLines = historyRes.body().split("\n", -1);
+                            for (int idx = 1; idx < hLines.length; idx++) {
+                                if (hLines[idx].isBlank()) continue;
+                                String[] cols = hLines[idx].split("\t", -1);
+                                if (cols.length >= 1) backedProjectIds.add(cols[0].trim());
+                                if (cols.length >= 2) backedRewardIds.add(cols[1].trim());
+                                if (cols.length >= 7) {
+                                    backedProjectIds.add(cols[6].trim());
+                                    backedProjectIds.add(cols[cols.length - 1].trim());
+                                }
+                            }
+                            for (Runnable r : refreshFundButtons) {
+                                r.run();
+                            }
+                        }
+                    });
+                });
+                historyTimer.setInitialDelay(0);
+                historyTimer.start();
+            }
+            // ▲▲▲ [리워드 추가 후원 기능 수정 끝 - 내 후원 내역(10번) 비동기 조회 및 버튼 문구 동기화] ▲▲▲
 
             request(18, id, res -> {
                 if (!dialog.isDisplayable()) return;
