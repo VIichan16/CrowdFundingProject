@@ -24,14 +24,12 @@ DB 없이 프레임 및 비로그인 권한 검사를 하려면 `bash gradlew pa
 | 0x0002 | PROJECT_REGISTER | 제목, 카테고리, 설명, 목표 금액, 시작일, 종료일 |
 | 0x0003 | PROJECT_SEARCH | 빈 본문(목록) 또는 프로젝트 ID(상세 및 리워드) |
 | 0x0004 | FUNDING | 프로젝트 ID, 리워드 ID, 수량 |
-| 0x0005 | PROJECT_LIKE | 프로젝트 ID, 선택 동작 (`like` 등록, `unlike` 취소, `toggle` 전환(응답 0 또는 1)). ID만 보내면 기존 등록 방식 사용 |
+| 0x0005 | PROJECT_LIKE | 프로젝트 ID |
 | 0x0006 | PROJECT_REVIEW | 프로젝트 ID, 별점(1~5), 내용 |
 | 0x0007 | PROJECT_MODIFY | 프로젝트 ID, 제목, 카테고리, 설명, 목표 금액, 시작일, 종료일 |
 | 0x0008 | REWARD_REGISTER | 프로젝트 ID, (리워드명, 설명, 금액, 수량) 반복; 수량 0은 무제한 |
 | 0x0009 | APPROVAL_REQUEST | 프로젝트 ID(최초 신청 또는 반려 후 재신청) |
 | 0x000A | FUNDING_HISTORY | 빈 본문; 로그인한 후원자의 내역 |
-
-후원자 계정으로 프로젝트 상세를 조회하면 첫 TSV 블록의 마지막 열 `liked_by_me`에 해당 계정의 좋아요 상태(0 또는 1)가 반환됩니다.
 
 CODE: `0x0000 REQUEST`, `0x0001 SUCCESS`, `0x0002 PERMISSION_DENIED`, `0x0003 INVALID_INPUT`, `0x0004 REWARD_CONDITION`, `0x0005 DATABASE_ERROR`, `0x0006 NOT_FOUND`, `0x0007 INVALID_STATE`, `0x0008 FORMAT_ERROR`.
 
@@ -68,3 +66,16 @@ GUI 오른쪽 목록은 화면 전환과 무관하게 유지됩니다. 관리자
 서버 실행 폴더의 `reward-images/`에 기존 리워드 ID와 같은 이름의 실제 사진(예: `42.jpg` 또는 `42.png`, 파일당 최대 48,000바이트)을 저장하면 프로젝트 상세에서 해당 리워드 사진 버튼으로 볼 수 있습니다. 실제 사진은 ZIP에 포함되지 않으며 없는 경우 안내가 표시됩니다. 사진은 TCP로 전달됩니다. 등록 UI에서 사진 업로드하는 기능은 포함하지 않습니다.
 
 추가 TYPE: `0x0010` 상시 목록(빈 본문 또는 관리자 전용 `pending`), `0x0011` 리워드 사진(프로젝트 ID, 리워드 ID; 성공 본문 Base64). 서버와 GUI를 함께 교체하세요.
+
+## 마이페이지 좋아요 목록
+
+마이페이지는 왼쪽 메뉴 버튼(내 정보, 내 후원 내역, 좋아요한 프로젝트)과 오른쪽 상세 화면으로 구성됩니다. 메이커·관리자는 "내 정보"만 표시됩니다.
+
+추가 TYPE (서포터 전용, 비로그인 시 `PERMISSION_DENIED`):
+
+| TYPE | 기능 | 요청 필드 | 성공 응답 |
+|---|---|---|---|
+| 0x0014 | LIKE_LIST | 빈 본문 | 로그인한 서포터가 누른 좋아요 목록 TSV (`프로젝트명, 카테고리, 상태, 달성률, 좋아요날짜, project_id`), 좋아요 최신순 최대 50행 |
+| 0x0015 | LIKE_CANCEL | 프로젝트 ID | `좋아요 취소 완료`. 좋아요하지 않은 프로젝트면 `NOT_FOUND` |
+
+`project_like` 테이블의 `created_at`, `like_id` 열을 사용하며 스키마 변경은 없습니다. 서버와 GUI를 함께 교체하세요.
