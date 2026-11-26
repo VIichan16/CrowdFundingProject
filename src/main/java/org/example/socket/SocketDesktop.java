@@ -496,7 +496,9 @@ public final class SocketDesktop extends JFrame {
 
         r.add(l, BorderLayout.WEST);
         r.add(component);
-        r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        int rowHeight = "projectImagePreview".equals(component.getName()) ? 190 : 42;
+        r.setMaximumSize(new Dimension(Integer.MAX_VALUE, rowHeight));
+        r.setPreferredSize(new Dimension(0, rowHeight));
         form.add(r);
     }
 
@@ -1183,6 +1185,18 @@ public final class SocketDesktop extends JFrame {
         if (t == 2) {
             JButton choose = new JButton("대표 사진 선택 (JPG/PNG)");
 
+            JLabel imagePreview = new JLabel("선택한 대표 사진이 여기에 표시됩니다.", SwingConstants.CENTER);
+            imagePreview.setName("projectImagePreview");
+            imagePreview.setPreferredSize(new Dimension(240, 170));
+            imagePreview.setMinimumSize(new Dimension(240, 170));
+            imagePreview.setOpaque(true);
+            imagePreview.setBackground(new Color(248, 249, 251));
+            imagePreview.setForeground(new Color(110, 115, 125));
+            imagePreview.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(210, 215, 222)),
+                    BorderFactory.createEmptyBorder(6, 6, 6, 6)
+            ));
+
             choose.addActionListener(e -> {
                 if (busy) return;
 
@@ -1200,23 +1214,28 @@ public final class SocketDesktop extends JFrame {
 
                     ImageIcon icon = new ImageIcon(bytes);
 
-                    if (icon.getIconWidth() <= 0) {
+                    if (icon.getIconWidth() <= 0 || icon.getIconHeight() <= 0) {
                         throw new IOException("사진 파일을 읽을 수 없습니다.");
                     }
 
                     projectImage = java.util.Base64.getEncoder().encodeToString(bytes);
                     choose.setText(picker.getSelectedFile().getName());
+                    imagePreview.setText("");
+                    imagePreview.setIcon(scaled(icon, 220, 150));
                     status.setText("대표 사진 선택 완료");
 
                 } catch (IOException ex) {
                     projectImage = null;
                     choose.setText("대표 사진 선택 (JPG/PNG)");
+                    imagePreview.setIcon(null);
+                    imagePreview.setText("사진 미리보기를 표시할 수 없습니다.");
                     status.setText(ex.getMessage());
                     JOptionPane.showMessageDialog(this, ex.getMessage(), "사진 첨부 실패", JOptionPane.ERROR_MESSAGE);
                 }
             });
 
             row("대표 사진", choose);
+            row("사진 미리보기", imagePreview);
         }
 
         if (t == 8) {
