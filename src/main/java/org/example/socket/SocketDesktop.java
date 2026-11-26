@@ -1444,7 +1444,6 @@ public final class SocketDesktop extends JFrame {
                 description.setAlignmentX(Component.LEFT_ALIGNMENT);
                 summary.add(description);
             }
-
             
             JPanel rewards = new JPanel();
             rewards.setBackground(Color.WHITE);
