@@ -45,7 +45,7 @@ public final class SocketDesktop extends JFrame {
     private final JButton submit = new JButton("실행");
     private final ArrayList<JComponent> fields = new ArrayList<>();
     private final DefaultTableModel catalogModel = new DefaultTableModel(
-            new String[]{"번호", "프로젝트", "카테고리", "상태"}, 0
+            new String[]{"ID", "사진", "프로젝트", "카테고리", "상태"}, 0
     ) {
         @Override
         public boolean isCellEditable(int r, int c) {
@@ -134,7 +134,9 @@ public final class SocketDesktop extends JFrame {
         head.add(buttons, BorderLayout.EAST);
 
         entrySwitch.addActionListener(e -> {
-            if (!busy) page(type == 1 ? 11 : 1);
+            if (busy) return;
+            if (type == 11) showLoginDialog();
+            else page(11);
         });
 
         work.add(head, BorderLayout.NORTH);
@@ -216,8 +218,25 @@ public final class SocketDesktop extends JFrame {
         catalog.getTableHeader().setPreferredSize(new Dimension(0, 34));
         catalog.setFont(catalog.getFont().deriveFont(14f));
         catalog.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        catalog.getColumnModel().getColumn(0).setPreferredWidth(48);
-        catalog.getColumnModel().getColumn(1).setPreferredWidth(340);
+        catalog.setRowHeight(86);
+        catalog.getColumnModel().getColumn(0).setMinWidth(0);
+        catalog.getColumnModel().getColumn(0).setMaxWidth(0);
+        catalog.getColumnModel().getColumn(0).setWidth(0);
+        catalog.getColumnModel().getColumn(1).setPreferredWidth(105);
+        catalog.getColumnModel().getColumn(2).setPreferredWidth(360);
+        catalog.getColumnModel().getColumn(3).setPreferredWidth(140);
+        catalog.getColumnModel().getColumn(4).setPreferredWidth(100);
+        catalog.getColumn("사진").setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean selected,
+                                                           boolean focused, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(
+                        table, value == null ? "사진 없음" : "", selected, focused, row, column);
+                label.setHorizontalAlignment(SwingConstants.CENTER);
+                label.setIcon(value instanceof ImageIcon icon ? icon : null);
+                return label;
+            }
+        });
 
         ActionListener filterAction = e -> applyCatalogFilterAndSort();
         categoryFilter.addActionListener(filterAction);
@@ -254,7 +273,7 @@ public final class SocketDesktop extends JFrame {
         getRootPane().setDefaultButton(submit);
 
         menu();
-        page(1);
+        page(0);
         refresh();
         applyCatalogFilterAndSort();
     }
@@ -264,7 +283,7 @@ public final class SocketDesktop extends JFrame {
         LinkedHashSet<String> categories = new LinkedHashSet<>();
         categories.add("전체 카테고리");
         for (int r = 0; r < catalogModel.getRowCount(); r++) {
-            String cat = String.valueOf(catalogModel.getValueAt(r, 2)).trim();
+            String cat = String.valueOf(catalogModel.getValueAt(r, 3)).trim();
             if (!cat.isEmpty()) categories.add(cat);
         }
         categoryModel.removeAllElements();
@@ -286,9 +305,9 @@ public final class SocketDesktop extends JFrame {
         catalogSorter.setRowFilter(new RowFilter<DefaultTableModel, Integer>() {
             @Override
             public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
-                String title = entry.getStringValue(1).toLowerCase(Locale.ROOT);
-                String category = entry.getStringValue(2).trim();
-                String statusText = entry.getStringValue(3).trim();
+                String title = entry.getStringValue(2).toLowerCase(Locale.ROOT);
+                String category = entry.getStringValue(3).trim();
+                String statusText = entry.getStringValue(4).trim();
 
                 if (!"전체 카테고리".equals(selectedCategory) && !selectedCategory.equals(category)) {
                     return false;
@@ -308,8 +327,8 @@ public final class SocketDesktop extends JFrame {
         switch (sortIdx) {
             case 1 -> keys.add(new RowSorter.SortKey(0, SortOrder.DESCENDING));
             case 2 -> keys.add(new RowSorter.SortKey(1, SortOrder.ASCENDING));
-            case 3 -> keys.add(new RowSorter.SortKey(2, SortOrder.ASCENDING));
-            case 4 -> keys.add(new RowSorter.SortKey(3, SortOrder.ASCENDING));
+            case 3 -> keys.add(new RowSorter.SortKey(3, SortOrder.ASCENDING));
+            case 4 -> keys.add(new RowSorter.SortKey(4, SortOrder.ASCENDING));
             default -> keys.add(new RowSorter.SortKey(0, SortOrder.ASCENDING));
         }
         catalogSorter.setSortKeys(keys);
@@ -337,7 +356,8 @@ public final class SocketDesktop extends JFrame {
         };
 
         for (int t : menu) button(TITLES[t], () -> {
-            if (t == 15) openMyPageDialog();
+            if (t == 1) showLoginDialog();
+            else if (t == 15) openMyPageDialog();
             else page(t);
         });
 
@@ -371,6 +391,68 @@ public final class SocketDesktop extends JFrame {
             if (!busy) action.run();
         });
         nav.add(b);
+    }
+
+    private void showLoginDialog() {
+        if (busy) return;
+
+        JDialog dialog = new JDialog(this, "로그인", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setSize(430, 300);
+        dialog.setResizable(false);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(14, 18));
+        panel.setBorder(BorderFactory.createEmptyBorder(24, 28, 24, 28));
+        JLabel title = new JLabel("로그인", SwingConstants.CENTER);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 25f));
+        panel.add(title, BorderLayout.NORTH);
+
+        JPanel fieldsPanel = new JPanel(new GridLayout(2, 2, 12, 14));
+        JTextField loginId = new JTextField();
+        JPasswordField password = new JPasswordField();
+        fieldsPanel.add(new JLabel("아이디"));
+        fieldsPanel.add(loginId);
+        fieldsPanel.add(new JLabel("비밀번호"));
+        fieldsPanel.add(password);
+        panel.add(fieldsPanel, BorderLayout.CENTER);
+
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 10, 0));
+        JButton login = new JButton("로그인");
+        JButton cancel = new JButton("취소");
+        buttons.add(login);
+        buttons.add(cancel);
+        panel.add(buttons, BorderLayout.SOUTH);
+
+        login.addActionListener(e -> {
+            if (busy) return;
+            String id = loginId.getText().strip();
+            String pw = new String(password.getPassword());
+            if (id.isBlank() || pw.isBlank()) {
+                JOptionPane.showMessageDialog(dialog, "아이디와 비밀번호를 입력하세요.");
+                return;
+            }
+            login.setEnabled(false);
+            request(1, id + "\t" + pw, result -> {
+                login.setEnabled(true);
+                if (result.code() != Packet.SUCCESS) {
+                    JOptionPane.showMessageDialog(dialog, result.body(), "로그인 실패", JOptionPane.WARNING_MESSAGE);
+                    password.setText("");
+                    return;
+                }
+                String[] values = result.body().split("\t", 2);
+                role = values.length > 0 ? values[0] : "";
+                name = values.length > 1 ? values[1] : "";
+                menu();
+                page(role.equals("ADMIN") ? 14 : role.equals("MAKER") ? 12 : 0);
+                dialog.dispose();
+                refresh();
+            });
+        });
+        cancel.addActionListener(e -> dialog.dispose());
+        dialog.getRootPane().setDefaultButton(login);
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
     }
 
     private void row(String label, JComponent component) {
@@ -752,7 +834,7 @@ public final class SocketDesktop extends JFrame {
         int viewRow = catalog.getSelectedRow();
         if (viewRow < 0) return;
         int modelRow = catalog.convertRowIndexToModel(viewRow);
-        String title = String.valueOf(catalogModel.getValueAt(modelRow, 1));
+        String title = String.valueOf(catalogModel.getValueAt(modelRow, 2));
         String category = String.valueOf(catalogModel.getValueAt(modelRow, 2));
         String state = String.valueOf(catalogModel.getValueAt(modelRow, 3));
         for (Component component : ((JPanel) form.getComponent(0)).getComponents()) {
@@ -765,7 +847,7 @@ public final class SocketDesktop extends JFrame {
         type = t;
         projectImage = null;
 
-        entrySwitch.setVisible(t == 1 || t == 11);
+        entrySwitch.setVisible(t == 11);
         submit.setVisible(t != 0);
         entrySwitch.setText(t == 1 ? "회원가입" : "로그인으로");
 
@@ -1092,8 +1174,8 @@ public final class SocketDesktop extends JFrame {
                     role = "";
                     name = "";
                     menu();
-                    page(1);
-                    status.setText("연결 오류: 서버 실행 상태와 포트를 확인한 뒤 다시 로그인하세요.");
+                    page(0);
+                    status.setText("연결 오류: 서버 실행 상태와 포트를 확인한 뒤 다시 시도하세요.");
                 }
             }
         }.execute();
@@ -1113,7 +1195,10 @@ public final class SocketDesktop extends JFrame {
             String[] lines = p.body().split("\n");
 
             for (int i = 1; i < lines.length; i++) {
-                catalogModel.addRow(lines[i].split("\t", -1));
+                String[] cells = lines[i].split("\t", -1);
+                if (cells.length >= 4) {
+                    catalogModel.addRow(new Object[]{cells[0], null, cells[1], cells[2], cells[3]});
+                }
             }
 
             syncCategoryFilterOptions();
@@ -1121,6 +1206,23 @@ public final class SocketDesktop extends JFrame {
             status.setText("프로젝트 " + catalog.getRowCount() + "개 표시 (전체 " + catalogModel.getRowCount() + "개)");
             if (type == 0 && catalog.getRowCount() > 0 && catalog.getSelectedRow() < 0) catalog.setRowSelectionInterval(0, 0);
             updateHomePreview();
+            loadCatalogImages(0);
+        });
+    }
+
+    private void loadCatalogImages(int modelRow) {
+        if (modelRow >= catalogModel.getRowCount()) return;
+        String projectId = String.valueOf(catalogModel.getValueAt(modelRow, 0));
+        request(18, projectId, result -> {
+            if (result.code() == Packet.SUCCESS) {
+                try {
+                    ImageIcon image = new ImageIcon(java.util.Base64.getDecoder().decode(result.body()));
+                    if (image.getIconWidth() > 0 && image.getIconHeight() > 0) {
+                        catalogModel.setValueAt(scaled(image, 92, 76), modelRow, 1);
+                    }
+                } catch (IllegalArgumentException ignored) {}
+            }
+            loadCatalogImages(modelRow + 1);
         });
     }
 
@@ -1144,7 +1246,7 @@ public final class SocketDesktop extends JFrame {
         if (id == null || viewRow < 0) return;
 
         int modelRow = catalog.convertRowIndexToModel(viewRow);
-        String titleText = String.valueOf(catalogModel.getValueAt(modelRow, 1));
+        String titleText = String.valueOf(catalogModel.getValueAt(modelRow, 2));
 
         request(3, id, p -> {
             if (p.code() != Packet.SUCCESS) {
