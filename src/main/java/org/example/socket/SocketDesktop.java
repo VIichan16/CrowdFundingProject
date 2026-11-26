@@ -773,14 +773,25 @@ public final class SocketDesktop extends JFrame {
             int selectedViewRow = historyTable.getSelectedRow();
             if (selectedViewRow < 0) return;
             int selectedModelRow = historyTable.convertRowIndexToModel(selectedViewRow);
-            int idColumn = historyModel.getColumnCount() - 1;
+            int idColumn = historyModel.findColumn("project_id");
+            if (idColumn < 0) return;
             String projectId = String.valueOf(historyModel.getValueAt(selectedModelRow, idColumn));
             openReviewDialog(dialog, projectId);
         });
         JPanel historyBottom = new JPanel(new BorderLayout(8, 8));
         JLabel historyStatus = new JLabel(" ");
         historyBottom.add(historyStatus, BorderLayout.CENTER);
-        historyBottom.add(writeReview, BorderLayout.EAST);
+        JButton cancelFunding = new JButton("후원 취소");
+        cancelFunding.setEnabled(false);
+        historyTable.getSelectionModel().addListSelectionListener(e -> {
+            int row = historyTable.getSelectedRow();
+            cancelFunding.setEnabled(row >= 0 && historyModel.findColumn("funding_id") >= 0
+                    && "후원완료".equals(String.valueOf(historyModel.getValueAt(historyTable.convertRowIndexToModel(row), 5))));
+        });
+        JPanel historyActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        historyActions.add(cancelFunding);
+        historyActions.add(writeReview);
+        historyBottom.add(historyActions, BorderLayout.EAST);
         historyPanel.add(historyBottom, BorderLayout.SOUTH);
 
         Runnable loadHistory = () -> {
@@ -788,6 +799,7 @@ public final class SocketDesktop extends JFrame {
             whenIdle(() -> request(10, "", history -> {
                 historyModel.setRowCount(0);
                 writeReview.setEnabled(false);
+                cancelFunding.setEnabled(false);
                 if (history.code() != Packet.SUCCESS) {
                     historyStatus.setText("후원 내역 조회 실패: " + history.body());
                     return;
@@ -812,7 +824,8 @@ public final class SocketDesktop extends JFrame {
                     }
                     historyModel.addRow(cells);
                 }
-                if (historyTable.getColumnModel().getColumnCount() == 7) {
+                if (historyTable.getColumnModel().getColumnCount() == 8) {
+                    historyTable.removeColumn(historyTable.getColumnModel().getColumn(7));
                     // 프로젝트 ID는 리뷰 작성에만 사용하고 화면에서는 숨긴다.
                     historyTable.removeColumn(historyTable.getColumnModel().getColumn(6));
                 }
@@ -824,6 +837,26 @@ public final class SocketDesktop extends JFrame {
                 historyStatus.setText(historyModel.getRowCount() == 0 ? "후원 내역이 없습니다." : "총 " + historyModel.getRowCount() + "건의 후원 내역");
             }), () -> historyStatus.setText("다른 요청을 처리 중입니다. 잠시 후 [내 후원 내역]을 다시 눌러 주세요."));
         };
+
+        cancelFunding.addActionListener(e -> {
+            if (busy) {
+                JOptionPane.showMessageDialog(dialog, "다른 요청 처리 중입니다. 잠시 후 다시 시도하세요.");
+                return;
+            }
+            int row = historyTable.getSelectedRow();
+            int idColumn = historyModel.findColumn("funding_id");
+            if (row < 0 || idColumn < 0) return;
+            String fundingId = String.valueOf(historyModel.getValueAt(historyTable.convertRowIndexToModel(row), idColumn));
+            if (JOptionPane.showConfirmDialog(dialog, "선택한 후원을 취소하시겠습니까?", "후원 취소",
+                    JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+            if (busy || !dialog.isDisplayable() || !"SUPPORTER".equals(role)) return;
+            cancelFunding.setEnabled(false);
+            request(22, fundingId, result -> {
+                JOptionPane.showMessageDialog(dialog, result.body(), "후원 취소",
+                        result.code() == Packet.SUCCESS ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
+                if (dialog.isDisplayable()) loadHistory.run();
+            });
+        });
 
         // ---------- 좋아요한 프로젝트 (서버 0x0014 조회, 0x0015 취소) ----------
         JPanel likePanel = new JPanel(new BorderLayout(10, 10));
@@ -1728,7 +1761,7 @@ public final class SocketDesktop extends JFrame {
                 description.setAlignmentX(Component.LEFT_ALIGNMENT);
                 summary.add(description);
             }
-            
+
             JPanel rewards = new JPanel();
             rewards.setBackground(Color.WHITE);
             rewards.setLayout(new BoxLayout(rewards, BoxLayout.Y_AXIS));
