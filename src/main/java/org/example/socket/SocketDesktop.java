@@ -1274,10 +1274,10 @@ public final class SocketDesktop extends JFrame {
                 try {
                     pct = Double.parseDouble(achievement);
                 } catch (Exception ignored) {}
-                pct = Math.max(0.0, pct);
+                pct = Math.max(0.0, pct); // 100% 상한 제거
 
                 int scaled = (int) Math.round(pct * 10);
-                JProgressBar progress = new JProgressBar(0, Math.max(1000, scaled));
+                JProgressBar progress = new JProgressBar(0, Math.max(1000, scaled)); // 바 최댓값 확장
                 progress.setValue(scaled);
                 progress.setStringPainted(false);
                 progress.setForeground(accent);
@@ -1288,10 +1288,29 @@ public final class SocketDesktop extends JFrame {
                 fundingBox.add(progress);
                 fundingBox.add(Box.createVerticalStrut(6));
 
-                JLabel percentLabel = new JLabel(String.format(Locale.KOREA, "목표 달성률 %.2f%%", pct));
+                // ▼ 여기부터가 방금 추가한 "펀딩 성공!" 표시 부분 ▼
+                JPanel percentRow = new JPanel();
+                percentRow.setOpaque(false);
+                percentRow.setLayout(new BoxLayout(percentRow, BoxLayout.X_AXIS));
+                percentRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+                JLabel percentLabel = new JLabel(String.format(java.util.Locale.KOREA, "목표 달성률 %.2f%%", pct));
                 percentLabel.setForeground(accent);
                 percentLabel.setFont(percentLabel.getFont().deriveFont(Font.BOLD, 13f));
-                fundingBox.add(percentLabel);
+                percentRow.add(percentLabel);
+
+                if (pct >= 100.0) {
+                    percentRow.add(Box.createHorizontalStrut(8));
+                    JLabel successBadge = new JLabel("펀딩 성공!");
+                    successBadge.setForeground(new Color(22, 163, 74));
+                    successBadge.setFont(successBadge.getFont().deriveFont(Font.BOLD, 13f));
+                    percentRow.add(successBadge);
+                }
+
+                fundingBox.add(percentRow);
+
+                fundingBox.add(Box.createVerticalStrut(6));
+
 
                 summary.add(fundingBox);
                 summary.add(Box.createVerticalStrut(13));
