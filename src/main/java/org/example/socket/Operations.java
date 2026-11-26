@@ -60,7 +60,7 @@ final class Operations {
                 return rows(c,detail+" WHERE project_id=?",id)+"\n\n"+rows(c,"SELECT reward_id,reward_name,description,required_amount,remaining_quantity FROM reward WHERE project_id=? ORDER BY reward_id LIMIT 50",id);
             }
         }
-        require(u!=null,PERMISSION_DENIED,"로그인이 필요합니다.");
+        if(u==null && t!=17 && t!=18)require(false,PERMISSION_DENIED,"로그인이 필요합니다.");
         if(t==2||t==7||t==8||t==9||t==12)require("MAKER".equals(u.getRole()),PERMISSION_DENIED,"메이커 전용입니다.");
         if(t==4||t==5||t==6||t==10)require("SUPPORTER".equals(u.getRole()),PERMISSION_DENIED,"후원자 전용입니다.");
         if(t==13||t==14) require("ADMIN".equals(u.getRole()),PERMISSION_DENIED,"관리자 전용입니다.");
@@ -104,7 +104,7 @@ final class Operations {
         }catch(Exception e){for(var file:files)try{java.nio.file.Files.deleteIfExists(file);}catch(java.io.IOException x){e.addSuppressed(x);}throw e;}
     }
     static String execute(Connection c,int t,String[] f,LoginUser u)throws Exception{
-        long uid=u.getId();
+        long uid=u==null?-1:u.getId();
         switch(t){
             case 2:{require(f.length==6||f.length==7,FORMAT_ERROR,"필드 개수 오류");var a=projectFields(f,0);
                 if(f.length==6) update(c,"INSERT INTO project (project_name,category,description,target_amount,start_date,end_date,maker_id,project_status) VALUES (?,?,?,?,?,?,?,'대기')",a[0],a[1],a[2],a[3],a[4],a[5],uid);
@@ -165,7 +165,8 @@ final class Operations {
             case 14:{if(f.length==0)return summary(c,"",new Object[0]);arity(f,1);int id=positive(f[0]);return summary(c," WHERE p.project_id=?",id)+"\n\n"+rows(c,"SELECT f.funding_id,u.id,u.login_id,u.name,f.quantity,f.funding_amount,f.funding_status FROM funding f JOIN users u ON u.id=f.supporter_id WHERE f.project_id=? ORDER BY f.funding_id DESC LIMIT 50",id);}
             case 15:{arity(f,0);return rows(c,"SELECT id,login_id,name,role,phone_number,bio FROM users WHERE id=?",uid);}
             case 17:{arity(f,2);int id=positive(f[0]), rid=positive(f[1]);
-                boolean admin="ADMIN".equals(u.getRole());if(!admin)project(c,id,u,false,false);
+                if(u==null){require(exists(c,"SELECT 1 FROM project WHERE project_id=? AND project_status IN ('진행중','성공','종료','실패')",id),PERMISSION_DENIED,"공개된 프로젝트가 아닙니다.");}
+                else if(!"ADMIN".equals(u.getRole()))project(c,id,u,false,false);
                 String stored;
                 try(var stmt=stmt(c,"SELECT image_path FROM reward WHERE project_id=? AND reward_id=?",id,rid);var rs=stmt.executeQuery()){
                     require(rs.next(),NOT_FOUND,"리워드 없음");stored=rs.getString(1);
@@ -188,7 +189,9 @@ final class Operations {
                         return java.util.Base64.getEncoder().encodeToString(data);
                     }
                 }throw new Failure(NOT_FOUND,"등록된 리워드 사진이 없습니다.");}
-            case 18:{arity(f,1);int id=positive(f[0]);if(!"ADMIN".equals(u.getRole()))project(c,id,u,false,false);
+            case 18:{arity(f,1);int id=positive(f[0]);
+                if(u==null){require(exists(c,"SELECT 1 FROM project WHERE project_id=? AND project_status IN ('진행중','성공','종료','실패')",id),PERMISSION_DENIED,"공개된 프로젝트가 아닙니다.");}
+                else if(!"ADMIN".equals(u.getRole()))project(c,id,u,false,false);
                 String path;try(var p=stmt(c,"SELECT image_path FROM project WHERE project_id=?",id);var r=p.executeQuery()){require(r.next(),NOT_FOUND,"프로젝트 없음");path=r.getString(1);}
                 require(path!=null&&path.matches("project-images/[A-Za-z0-9_-]+[.](jpg|png)"),NOT_FOUND,"등록된 대표 사진이 없습니다.");
                 var file=java.nio.file.Path.of(path);require(java.nio.file.Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS),NOT_FOUND,"사진 파일 없음");
