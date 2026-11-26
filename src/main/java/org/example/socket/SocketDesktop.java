@@ -164,26 +164,26 @@ public final class SocketDesktop extends JFrame {
         catalogPanel.setBackground(Color.WHITE);
 
         JButton refreshBtn = new JButton("새로고침");
-JButton detail = new JButton("상세·리워드 사진");
+        JButton detail = new JButton("상세·리워드 사진");
 
-JPanel actions = new JPanel(new GridLayout(1, 0, 4, 4));
-actions.add(detail);
-actions.add(pending);
-actions.add(approve);
+        JPanel actions = new JPanel(new GridLayout(1, 0, 4, 4));
+        actions.add(detail);
+        actions.add(pending);
+        actions.add(approve);
 
-JPanel filterBar = new JPanel(new GridLayout(2, 2, 4, 4));
-filterBar.add(categoryFilter);
-filterBar.add(statusFilter);
-filterBar.add(keywordFilter);
-filterBar.add(sortOption);
+        JPanel filterBar = new JPanel(new GridLayout(2, 2, 4, 4));
+        filterBar.add(categoryFilter);
+        filterBar.add(statusFilter);
+        filterBar.add(keywordFilter);
+        filterBar.add(sortOption);
 
-JPanel filterArea = new JPanel(new BorderLayout(8, 0));
-filterArea.add(filterBar, BorderLayout.CENTER);
-filterArea.add(refreshBtn, BorderLayout.EAST);
+        JPanel filterArea = new JPanel(new BorderLayout(8, 0));
+        filterArea.add(filterBar, BorderLayout.CENTER);
+        filterArea.add(refreshBtn, BorderLayout.EAST);
 
-JPanel catalogTop = new JPanel(new BorderLayout(0, 4));
-catalogTop.add(actions, BorderLayout.NORTH);
-catalogTop.add(filterArea, BorderLayout.SOUTH);
+        JPanel catalogTop = new JPanel(new BorderLayout(0, 4));
+        catalogTop.add(actions, BorderLayout.NORTH);
+        catalogTop.add(filterArea, BorderLayout.SOUTH);
 
         catalogPanel.add(catalogTop, BorderLayout.NORTH);
         JScrollPane catalogScroll = new JScrollPane(catalog);
@@ -1313,25 +1313,37 @@ catalogTop.add(filterArea, BorderLayout.SOUTH);
             summary.add(title);
             summary.add(Box.createVerticalStrut(12));
 
+            boolean supporter = "SUPPORTER".equals(role);
+            boolean likeStateAvailable = data.length > 10 && ("1".equals(data[10]) || "0".equals(data[10]));
             JButton likeButton = new JButton("♡ 좋아요");
+            final boolean[] liked = {likeStateAvailable && "1".equals(data[10])};
             likeButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-            likeButton.setEnabled("SUPPORTER".equals(role));
-            likeButton.setToolTipText("서포터 계정으로 로그인하면 좋아요를 누를 수 있습니다.");
+            likeButton.setText(liked[0] ? "♥ 좋아요 취소" : "♡ 좋아요");
+            likeButton.setEnabled(supporter && likeStateAvailable);
+            Socket detailSession = socket;
             likeButton.addActionListener(likeEvent -> {
-                if (!"SUPPORTER".equals(role)) {
-                    JOptionPane.showMessageDialog(dialog, "좋아요는 서포터 계정으로 로그인한 후 이용할 수 있습니다.");
-                    return;
-                }
                 likeButton.setEnabled(false);
-                request(5, id, likeResult -> {
-                    if (likeResult.code() == Packet.SUCCESS) {
-                        likeButton.setText("♥ 좋아요 완료");
-                        JOptionPane.showMessageDialog(dialog, "이 프로젝트에 좋아요를 눌렀습니다.");
-                    } else {
-                        likeButton.setEnabled(true);
-                        JOptionPane.showMessageDialog(dialog, likeResult.body(), "좋아요 처리", JOptionPane.INFORMATION_MESSAGE);
+                // 이미지 요청이 끝날 때까지 기다린 후 좋아요 요청을 전송한다.
+                javax.swing.Timer timer = new javax.swing.Timer(100, null);
+                timer.addActionListener(event -> {
+                    if (!dialog.isDisplayable() || socket != detailSession || !"SUPPORTER".equals(role)) {
+                        timer.stop();
+                        return;
                     }
+                    if (busy) return;
+                    timer.stop();
+                    request(5, id + "\ttoggle", result -> {
+                        if (!dialog.isDisplayable()) return;
+                        likeButton.setEnabled(true);
+                        if (result.code() == Packet.SUCCESS && ("1".equals(result.body()) || "0".equals(result.body()))) {
+                            liked[0] = "1".equals(result.body());
+                            likeButton.setText(liked[0] ? "♥ 좋아요 취소" : "♡ 좋아요");
+                        } else {
+                            JOptionPane.showMessageDialog(dialog, result.body(), "좋아요 처리", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                    });
                 });
+                timer.start();
             });
             summary.add(likeButton);
             summary.add(Box.createVerticalStrut(16));
